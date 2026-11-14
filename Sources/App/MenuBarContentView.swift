@@ -9,6 +9,11 @@ struct MenuContentView: View {
     @ObservedObject private var petWindow = PetWindowController.shared
     @ObservedObject private var statusBar = StatusBarController.shared
     @ObservedObject private var pet = PetController.shared
+    @ObservedObject private var goalCtrl = TargetGoalController.shared
+    @ObservedObject private var workCtrl = WorkTrackerController.shared
+    @ObservedObject private var reminderCtrl = ReminderController.shared
+    @ObservedObject private var pomoCtrl = PomodoroController.shared
+    @ObservedObject private var quoteCtrl = QuoteController.shared
     var dismiss: () -> Void
 
     /// Show agents that are doing something or just finished. Idle and merely
@@ -22,21 +27,313 @@ struct MenuContentView: View {
         VStack(spacing: 0) {
             header
             divider
+            goalOverviewSection
+            dueReminderBanner
+            pomoAndWorkSection
+            divider
             careSection
             divider
             agentSection
+            divider
+            quoteStrip
             divider
             controls
             divider
             footer
         }
-        .frame(width: 300)
+        .frame(width: 320)
         .background(.regularMaterial)
         .environment(\.colorScheme, .dark)
         .noFocusRing()
     }
 
     private var divider: some View { Divider().overlay(Color.white.opacity(0.08)) }
+
+    // MARK: - Primary Goal Overview
+
+    @ViewBuilder
+    private var goalOverviewSection: some View {
+        if let goal = goalCtrl.primaryGoal, let metrics = goalCtrl.primaryMetrics {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: goal.category.icon)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.accent)
+                    Text("PRIMARY TARGET · \(goal.category.displayName.uppercased())")
+                        .font(.system(size: 9, weight: .bold))
+                        .tracking(1.2)
+                        .foregroundStyle(Theme.muted)
+                    Spacer()
+                    Text(metrics.statusLabel)
+                        .font(.system(size: 10, weight: .bold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(metrics.isOverdue ? Color.red.opacity(0.2) : Theme.accent.opacity(0.25)))
+                        .foregroundStyle(metrics.isOverdue ? Color.red : Theme.accent)
+                }
+
+                HStack {
+                    Text(goal.title)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    Spacer()
+                    Button {
+                        goalCtrl.focusOnPrimary()
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "play.fill").font(.system(size: 8))
+                            Text("Focus").font(.system(size: 10, weight: .bold))
+                        }
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.systemAccent))
+                        .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                ProgressView(value: metrics.timelineProgress)
+                    .tint(Theme.accent)
+                    .controlSize(.mini)
+
+                HStack {
+                    Text(metrics.elapsedLabel)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.white.opacity(0.5))
+                    Spacer()
+                    Text("Today \(workCtrl.formattedTodayWorked) / \(goal.dailyTargetMinutes / 60)h")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Color.white.opacity(0.04))
+            divider
+        }
+    }
+
+    // MARK: - Due Reminder Banner
+
+    @ViewBuilder
+    private var dueReminderBanner: some View {
+        if let due = reminderCtrl.dueReminders.first {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    Image(systemName: due.icon)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.orange)
+                    Text(due.title)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Text("DUE")
+                        .font(.system(size: 8, weight: .black))
+                        .tracking(1.0)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(RoundedRectangle(cornerRadius: 3).fill(Color.orange.opacity(0.3)))
+                        .foregroundStyle(Color.orange)
+                }
+                Text(due.message)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .lineLimit(2)
+
+                HStack(spacing: 6) {
+                    Button("Snooze 5m") {
+                        reminderCtrl.snooze(ruleId: due.ruleId, minutes: 5)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+
+                    Button("Snooze 15m") {
+                        reminderCtrl.snooze(ruleId: due.ruleId, minutes: 15)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+
+                    Spacer()
+
+                    Button("Done") {
+                        reminderCtrl.complete(ruleId: due.ruleId)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+                    .controlSize(.mini)
+                }
+                .padding(.top, 2)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Color.orange.opacity(0.12))
+            .overlay(Rectangle().stroke(Color.orange.opacity(0.3), lineWidth: 1))
+            divider
+        }
+    }
+
+    // MARK: - Pomodoro & Work Bar
+
+    private var pomoAndWorkSection: some View {
+        let pomoState = pomoCtrl.state
+        let isFocus = (pomoState.phase == .focus)
+        let isBreak = pomoState.phase.isBreak
+
+        return VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(isFocus ? Color.red : (isBreak ? Color.green : Color.gray))
+                        .frame(width: 7, height: 7)
+                    Text(pomoState.phase.displayName)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.85))
+                    Text(pomoState.formattedRemaining)
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.white)
+                }
+
+                Spacer()
+
+                if pomoState.phase == .idle {
+                    Button {
+                        pomoCtrl.startFocus()
+                    } label: {
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 15))
+                            .foregroundStyle(Color.systemAccent)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Button {
+                        pomoState.isPaused ? pomoCtrl.resume() : pomoCtrl.pause()
+                    } label: {
+                        Image(systemName: pomoState.isPaused ? "play.circle.fill" : "pause.circle.fill")
+                            .font(.system(size: 15))
+                            .foregroundStyle(Color.systemAccent)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        pomoCtrl.skip()
+                    } label: {
+                        Image(systemName: "forward.end.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        pomoCtrl.reset()
+                    } label: {
+                        Image(systemName: "arrow.counterclockwise.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            HStack(spacing: 8) {
+                Button {
+                    workCtrl.toggleManualWork()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: workCtrl.isWorkingManual ? "stop.circle.fill" : "play.circle")
+                            .font(.system(size: 10))
+                        Text(workCtrl.isWorkingManual ? "Clock Out" : "Clock In")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(workCtrl.isWorkingManual ? Color.red.opacity(0.2) : Color.white.opacity(0.08)))
+                    .foregroundStyle(workCtrl.isWorkingManual ? Color.red : .white)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    reminderCtrl.drinkWaterQuick()
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "drop.fill").font(.system(size: 9))
+                        Text("+1 Water (\(reminderCtrl.waterCupsToday))").font(.system(size: 10))
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.blue.opacity(0.15)))
+                    .foregroundStyle(Color.cyan)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                HStack(spacing: 3) {
+                    Image(systemName: "clock").font(.system(size: 9))
+                    Text(workCtrl.formattedTodayWorked)
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                }
+                .foregroundStyle(.white.opacity(0.6))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+    }
+
+    // MARK: - Quote Strip
+
+    private var quoteStrip: some View {
+        let item = quoteCtrl.currentQuote
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                HStack(spacing: 3) {
+                    Image(systemName: item.category.icon).font(.system(size: 8))
+                    Text(item.category.displayName.uppercased())
+                        .font(.system(size: 8, weight: .bold))
+                }
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(Theme.accent.opacity(0.25)))
+                .foregroundStyle(Theme.accent)
+
+                Spacer()
+
+                Button {
+                    quoteCtrl.toggleFavorite(id: item.id)
+                } label: {
+                    Image(systemName: item.isFavorite ? "star.fill" : "star")
+                        .font(.system(size: 10))
+                        .foregroundStyle(item.isFavorite ? Color.yellow : .white.opacity(0.4))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    quoteCtrl.nextQuote()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+                .buttonStyle(.plain)
+            }
+
+            Text("\"\(item.text)\"")
+                .font(.system(size: 10, weight: .medium, design: .serif))
+                .foregroundStyle(.white.opacity(0.85))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if !item.authorOrMeaning.isEmpty {
+                Text(item.category == .idioms ? "Meaning: \(item.authorOrMeaning)" : "— \(item.authorOrMeaning)")
+                    .font(.system(size: 9, design: .serif))
+                    .foregroundStyle(.white.opacity(0.45))
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Color.white.opacity(0.02))
+    }
 
     // MARK: Header
 
