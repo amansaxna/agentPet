@@ -15,14 +15,35 @@ def main():
     parser.add_argument("--voice", default="af_sarah", help="Voice identifier (e.g. af_sarah, af_bella, am_adam)")
     parser.add_argument("--output", required=True, help="Output WAV path")
     parser.add_argument("--speed", type=float, default=1.0, help="Speech speed multiplier")
+    parser.add_argument("--model", default=None, help="Path to kokoro onnx model")
+    parser.add_argument("--voices", default=None, help="Path to voices.bin")
     args = parser.parse_args()
 
     home = os.path.expanduser("~")
-    model_path = os.path.join(home, ".agentpet", "kokoro", "kokoro-v0_19.onnx")
-    voices_path = os.path.join(home, ".agentpet", "kokoro", "voices.bin")
+    script_dir = os.path.dirname(os.path.abspath(__file__))
 
-    if not os.path.exists(model_path) or not os.path.exists(voices_path):
-        print(f"Error: Kokoro model files not found at {model_path}", file=sys.stderr)
+    # Search candidates for ONNX model (prefers int8 quantized ~88MB for fast inference)
+    model_candidates = [
+        args.model,
+        os.path.join(script_dir, "kokoro-v1.0.int8.onnx"),
+        os.path.join(script_dir, "kokoro-v0_19.onnx"),
+        os.path.join(home, ".agentpet", "kokoro", "kokoro-v1.0.int8.onnx"),
+        os.path.join(home, ".agentpet", "kokoro", "kokoro-v0_19.onnx"),
+        os.path.join(home, "Library", "Application Support", "AgentPet", "kokoro", "kokoro-v1.0.int8.onnx"),
+        os.path.join(home, "Library", "Application Support", "AgentPet", "kokoro", "kokoro-v0_19.onnx")
+    ]
+    model_path = next((p for p in model_candidates if p and os.path.exists(p)), None)
+
+    voices_candidates = [
+        args.voices,
+        os.path.join(script_dir, "voices.bin"),
+        os.path.join(home, ".agentpet", "kokoro", "voices.bin"),
+        os.path.join(home, "Library", "Application Support", "AgentPet", "kokoro", "voices.bin")
+    ]
+    voices_path = next((p for p in voices_candidates if p and os.path.exists(p)), None)
+
+    if not model_path or not voices_path:
+        print(f"Error: Kokoro model files not found (model={model_path}, voices={voices_path})", file=sys.stderr)
         sys.exit(1)
 
     kokoro = Kokoro(model_path, voices_path)

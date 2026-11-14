@@ -133,18 +133,13 @@ public final class VoiceController: NSObject, ObservableObject, AVSpeechSynthesi
     }
 
     public var isKokoroInstalled: Bool {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let pythonBin = "\(home)/.agentpet/kokoro-env/bin/python"
-        let modelFile = "\(home)/.agentpet/kokoro/kokoro-v0_19.onnx"
-        let voicesFile = "\(home)/.agentpet/kokoro/voices.bin"
-        return FileManager.default.fileExists(atPath: pythonBin) &&
-               FileManager.default.fileExists(atPath: modelFile) &&
-               FileManager.default.fileExists(atPath: voicesFile)
+        FrontierVoiceService.shared.isKokoroReady
     }
 
     public func installKokoro() async throws {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let script = "\(home)/Documents/Claude/Projects/agentpet/scripts/setup-kokoro.sh"
+        let bundleScript = Bundle.main.path(forResource: "setup-kokoro", ofType: "sh")
+        let script = bundleScript ?? "\(home)/.agentpet/setup-kokoro.sh"
         guard FileManager.default.fileExists(atPath: script) else {
             throw NSError(domain: "Kokoro", code: 404, userInfo: [NSLocalizedDescriptionKey: "setup-kokoro.sh script not found"])
         }

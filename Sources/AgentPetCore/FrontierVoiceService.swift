@@ -153,33 +153,76 @@ public final class FrontierVoiceService: @unchecked Sendable {
 
     // MARK: - 2. Kokoro-82M Local Neural TTS
 
-    private func fetchKokoroSpeech(text: String, voice: String) async throws -> Data {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let pythonBin = "\(home)/.agentpet/kokoro-env/bin/python"
-        let modelFile = "\(home)/.agentpet/kokoro/kokoro-v0_19.onnx"
-        let voicesFile = "\(home)/.agentpet/kokoro/voices.bin"
+    public struct KokoroAssets: Sendable {
+        public let pythonBin: String
+        public let scriptPath: String
+        public let modelPath: String
+        public let voicesPath: String
+    }
 
-        guard FileManager.default.fileExists(atPath: pythonBin) &&
-              FileManager.default.fileExists(atPath: modelFile) &&
-              FileManager.default.fileExists(atPath: voicesFile) else {
-            throw NSError(domain: "KokoroVoice", code: 404, userInfo: [
-                NSLocalizedDescriptionKey: "Kokoro model or environment not found. Run ./scripts/setup-kokoro.sh or install in Settings → Voice."
-            ])
+    public var isKokoroReady: Bool {
+        resolvedKokoroAssets() != nil
+    }
+
+    public func resolvedKokoroAssets() -> KokoroAssets? {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let fm = FileManager.default
+        let resourcePath = Bundle.main.resourcePath
+
+        // 1. Python binary
+        let pythonCandidates: [String?] = [
+            resourcePath.map { "\($0)/kokoro-env/bin/python" },
+            "\(home)/Library/Application Support/AgentPet/kokoro-env/bin/python",
+            "\(home)/.agentpet/kokoro-env/bin/python"
+        ]
+        guard let pythonBin = pythonCandidates.compactMap({ $0 }).first(where: { fm.fileExists(atPath: $0) }) else {
+            return nil
         }
 
-        let bundleScript = Bundle.main.path(forResource: "kokoro_tts", ofType: "py")
-        let projectScript = "\(Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent().path)/scripts/kokoro_tts.py"
-        let fallbackScript = "\(home)/Documents/Claude/Projects/agentpet/scripts/kokoro_tts.py"
-        let scriptPath: String
-        if let b = bundleScript, FileManager.default.fileExists(atPath: b) {
-            scriptPath = b
-        } else if FileManager.default.fileExists(atPath: fallbackScript) {
-            scriptPath = fallbackScript
-        } else if FileManager.default.fileExists(atPath: projectScript) {
-            scriptPath = projectScript
-        } else {
+        // 2. Script
+        let scriptCandidates: [String?] = [
+            Bundle.main.path(forResource: "kokoro_tts", ofType: "py"),
+            resourcePath.map { "\($0)/kokoro/kokoro_tts.py" },
+            "\(home)/Library/Application Support/AgentPet/kokoro/kokoro_tts.py",
+            "\(home)/.agentpet/kokoro/kokoro_tts.py"
+        ]
+        guard let scriptPath = scriptCandidates.compactMap({ $0 }).first(where: { fm.fileExists(atPath: $0) }) else {
+            return nil
+        }
+
+        // 3. Model (prefers int8 quantized ~88MB)
+        let modelCandidates: [String?] = [
+            Bundle.main.path(forResource: "kokoro-v1.0.int8", ofType: "onnx"),
+            resourcePath.map { "\($0)/kokoro/kokoro-v1.0.int8.onnx" },
+            Bundle.main.path(forResource: "kokoro-v0_19", ofType: "onnx"),
+            resourcePath.map { "\($0)/kokoro/kokoro-v0_19.onnx" },
+            "\(home)/Library/Application Support/AgentPet/kokoro/kokoro-v1.0.int8.onnx",
+            "\(home)/.agentpet/kokoro/kokoro-v1.0.int8.onnx",
+            "\(home)/Library/Application Support/AgentPet/kokoro/kokoro-v0_19.onnx",
+            "\(home)/.agentpet/kokoro/kokoro-v0_19.onnx"
+        ]
+        guard let modelPath = modelCandidates.compactMap({ $0 }).first(where: { fm.fileExists(atPath: $0) }) else {
+            return nil
+        }
+
+        // 4. Voices
+        let voicesCandidates: [String?] = [
+            Bundle.main.path(forResource: "voices", ofType: "bin"),
+            resourcePath.map { "\($0)/kokoro/voices.bin" },
+            "\(home)/Library/Application Support/AgentPet/kokoro/voices.bin",
+            "\(home)/.agentpet/kokoro/voices.bin"
+        ]
+        guard let voicesPath = voicesCandidates.compactMap({ $0 }).first(where: { fm.fileExists(atPath: $0) }) else {
+            return nil
+        }
+
+        return KokoroAssets(pythonBin: pythonBin, scriptPath: scriptPath, modelPath: modelPath, voicesPath: voicesPath)
+    }
+
+    private func fetchKokoroSpeech(text: String, voice: String) async throws -> Data {
+        guard let assets = resolvedKokoroAssets() else {
             throw NSError(domain: "KokoroVoice", code: 404, userInfo: [
-                NSLocalizedDescriptionKey: "scripts/kokoro_tts.py script not found."
+                NSLocalizedDescriptionKey: "Kokoro model or environment not found. Please verify Kokoro local assets in Settings → Voice."
             ])
         }
 
@@ -189,12 +232,14 @@ public final class FrontierVoiceService: @unchecked Sendable {
         return try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 let process = Process()
-                process.executableURL = URL(fileURLWithPath: pythonBin)
+                process.executableURL = URL(fileURLWithPath: assets.pythonBin)
                 process.arguments = [
-                    scriptPath,
+                    assets.scriptPath,
                     "--text", text,
                     "--voice", selectedVoice,
-                    "--output", tempOut.path
+                    "--output", tempOut.path,
+                    "--model", assets.modelPath,
+                    "--voices", assets.voicesPath
                 ]
 
                 let pipe = Pipe()
