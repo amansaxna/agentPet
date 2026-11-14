@@ -2,6 +2,8 @@
 // ClaudeActivityFormatter (5 themes, per-tool phrase pools, file-type hints,
 // rotating pick per key). Phrases are intentionally English, like macOS.
 
+import * as quotes from "./quotes";
+
 export type ActivityThemeName = "chef" | "engineer" | "wizard" | "explorer" | "scientist";
 
 interface ThemePools {
@@ -193,7 +195,18 @@ export function defaultLines(mood: string): string[] {
     case "waiting": return PET_CHAT.waiting;
     case "done": return PET_CHAT.done;
     case "celebrate": return PET_CHAT.celebrate;
-    case "idle": return IDLE_BOOST;
+    case "idle": {
+      try {
+        const qCfg = quotes.getQuoteConfig();
+        if (qCfg.showInPetBubble) {
+          const eligible = quotes.getEligibleQuotes();
+          if (eligible.length) {
+            return eligible.map((q) => q.authorOrMeaning ? `${q.text} (${q.authorOrMeaning})` : q.text);
+          }
+        }
+      } catch {}
+      return IDLE_BOOST;
+    }
     default: return []; // working: blank = live activity wins
   }
 }

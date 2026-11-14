@@ -16,6 +16,10 @@ public enum Achievement: String, Codable, CaseIterable, Sendable {
     case streak14
     case streak30
     case nightOwl
+    case focus1Hour
+    case focus10Hours
+    case focus50Hours
+    case focus100Hours
 }
 
 /// How hungry the pet is, derived from the time since its last feeding.
@@ -28,7 +32,7 @@ public enum PetHunger: String, Codable, CaseIterable, Sendable {
 }
 
 /// Persistent tamagotchi state: the pet is fed by real agent work — tokens
-/// consumed (Claude transcripts) and finished sessions ("meals").
+/// consumed (Claude transcripts), finished sessions ("meals"), and focused study time.
 public struct PetCareState: Codable, Equatable, Sendable {
     /// Lifetime experience. Never decreases.
     public var xp: Int
@@ -42,7 +46,7 @@ public struct PetCareState: Codable, Equatable, Sendable {
     public var totalTokens: Int
     /// Lifetime finished sessions.
     public var totalMeals: Int
-    /// Last time the pet was fed anything (tokens or a meal).
+    /// Last time the pet was fed anything (tokens, a meal, or focus session).
     public var lastFedAt: Date?
     /// Local-calendar day the counters belong to ("2026-06-12").
     public var dayKey: String
@@ -55,6 +59,12 @@ public struct PetCareState: Codable, Equatable, Sendable {
     /// existed still decode.
     public var days: [String: Int]?
     public var unlockedAchievements: Set<Achievement>?
+    /// Total focused seconds accumulated today (Pomodoro, Timer, Stopwatch).
+    public var focusSecondsToday: Int
+    /// Lifetime focused seconds.
+    public var totalFocusSeconds: Int
+    /// Sub-XP seconds remainder carried to next feeding.
+    public var focusCarrySeconds: Int
 
     public init() {
         xp = 0
@@ -68,6 +78,28 @@ public struct PetCareState: Codable, Equatable, Sendable {
         streakDays = 0
         lastFedDayKey = nil
         days = [:]
+        focusSecondsToday = 0
+        totalFocusSeconds = 0
+        focusCarrySeconds = 0
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        xp = try container.decodeIfPresent(Int.self, forKey: .xp) ?? 0
+        tokenCarry = try container.decodeIfPresent(Int.self, forKey: .tokenCarry) ?? 0
+        tokensToday = try container.decodeIfPresent(Int.self, forKey: .tokensToday) ?? 0
+        mealsToday = try container.decodeIfPresent(Int.self, forKey: .mealsToday) ?? 0
+        totalTokens = try container.decodeIfPresent(Int.self, forKey: .totalTokens) ?? 0
+        totalMeals = try container.decodeIfPresent(Int.self, forKey: .totalMeals) ?? 0
+        lastFedAt = try container.decodeIfPresent(Date.self, forKey: .lastFedAt)
+        dayKey = try container.decodeIfPresent(String.self, forKey: .dayKey) ?? ""
+        streakDays = try container.decodeIfPresent(Int.self, forKey: .streakDays) ?? 0
+        lastFedDayKey = try container.decodeIfPresent(String.self, forKey: .lastFedDayKey)
+        days = try container.decodeIfPresent([String: Int].self, forKey: .days) ?? [:]
+        unlockedAchievements = try container.decodeIfPresent(Set<Achievement>.self, forKey: .unlockedAchievements)
+        focusSecondsToday = try container.decodeIfPresent(Int.self, forKey: .focusSecondsToday) ?? 0
+        totalFocusSeconds = try container.decodeIfPresent(Int.self, forKey: .totalFocusSeconds) ?? 0
+        focusCarrySeconds = try container.decodeIfPresent(Int.self, forKey: .focusCarrySeconds) ?? 0
     }
 }
 
@@ -225,6 +257,44 @@ public enum PetCare {
         state.dayKey = today
         state.tokensToday = 0
         state.mealsToday = 0
+        state.focusSecondsToday = 0
+    }
+
+    /// 1 XP earned per this many seconds of focus (60s = 1 XP per minute of focus).
+    public static let secondsPerFocusXP = 60
+
+    /// Records `seconds` of focused time (Pomodoro, Timer, or Stopwatch).
+    /// Awards XP at `secondsPerFocusXP` rate, updates daily and lifetime focus counters,
+    /// feeds the pet to keep hunger satisfied, and rolls over days.
+    @discardableResult
+    public static func recordFocus(
+        seconds: Int, state: inout PetCareState, now: Date, calendar: Calendar = .current
+    ) -> Int {
+        guard seconds > 0 else { return 0 }
+        rollover(&state, now: now, calendar: calendar)
+
+        state.totalFocusSeconds += seconds
+        state.focusSecondsToday += seconds
+
+        let pool = state.focusCarrySeconds + seconds
+        let gained = pool / secondsPerFocusXP
+        state.focusCarrySeconds = pool % secondsPerFocusXP
+        state.xp += gained
+
+        markFed(&state, now: now, calendar: calendar)
+        return gained
+    }
+
+    /// Formatted focus duration string ("2h 15m" or "45m").
+    public static func formattedFocusDuration(seconds: Int) -> String {
+        let s = max(0, seconds)
+        let h = s / 3600
+        let m = (s % 3600) / 60
+        if h > 0 {
+            return "\(h)h \(m)m"
+        } else {
+            return "\(m)m"
+        }
     }
 
     /// Tokens per day for the trailing `count` days ending today, oldest first.
@@ -264,12 +334,16 @@ public enum PetCare {
         let streakThresholds: [(Int, Achievement)] = [
             (7, .streak7), (14, .streak14), (30, .streak30),
         ]
+        let focusThresholds: [(Int, Achievement)] = [
+            (3_600, .focus1Hour), (36_000, .focus10Hours), (180_000, .focus50Hours), (360_000, .focus100Hours)
+        ]
 
         var result = Set<Achievement>()
-        for (threshold, badge) in mealThresholds   where state.totalMeals  >= threshold { result.insert(badge) }
-        for (threshold, badge) in tokenThresholds  where state.totalTokens >= threshold { result.insert(badge) }
-        for (threshold, badge) in levelThresholds  where dl                >= threshold { result.insert(badge) }
-        for (threshold, badge) in streakThresholds where state.streakDays  >= threshold { result.insert(badge) }
+        for (threshold, badge) in mealThresholds   where state.totalMeals        >= threshold { result.insert(badge) }
+        for (threshold, badge) in tokenThresholds  where state.totalTokens       >= threshold { result.insert(badge) }
+        for (threshold, badge) in levelThresholds  where dl                      >= threshold { result.insert(badge) }
+        for (threshold, badge) in streakThresholds where state.streakDays        >= threshold { result.insert(badge) }
+        for (threshold, badge) in focusThresholds  where state.totalFocusSeconds >= threshold { result.insert(badge) }
         if hour < 6, state.totalMeals >= 1 { result.insert(.nightOwl) }
         return result
     }
@@ -345,6 +419,10 @@ public enum PetCare {
         case .streak14:    return NSLocalizedString("14-Day Streak", comment: "achievement name")
         case .streak30:    return NSLocalizedString("30-Day Streak", comment: "achievement name")
         case .nightOwl:    return NSLocalizedString("Night Owl", comment: "achievement name")
+        case .focus1Hour:   return NSLocalizedString("Deep Focus", comment: "achievement name")
+        case .focus10Hours: return NSLocalizedString("Flow State", comment: "achievement name")
+        case .focus50Hours: return NSLocalizedString("Zen Master", comment: "achievement name")
+        case .focus100Hours: return NSLocalizedString("Grandmaster", comment: "achievement name")
         }
     }
 
@@ -366,6 +444,10 @@ public enum PetCare {
         case .streak14:    return NSLocalizedString("Feed your pet 14 days in a row", comment: "achievement hint")
         case .streak30:    return NSLocalizedString("Feed your pet 30 days in a row", comment: "achievement hint")
         case .nightOwl:    return NSLocalizedString("Finish a session after midnight", comment: "achievement hint")
+        case .focus1Hour:   return NSLocalizedString("Accumulate 1 hour of total focus time", comment: "achievement hint")
+        case .focus10Hours: return NSLocalizedString("Accumulate 10 hours of total focus time", comment: "achievement hint")
+        case .focus50Hours: return NSLocalizedString("Accumulate 50 hours of total focus time", comment: "achievement hint")
+        case .focus100Hours: return NSLocalizedString("Accumulate 100 hours of total focus time", comment: "achievement hint")
         }
     }
 
@@ -387,6 +469,10 @@ public enum PetCare {
         case .streak14:    return "calendar.badge.clock"
         case .streak30:    return "calendar.badge.checkmark"
         case .nightOwl:    return "moon.fill"
+        case .focus1Hour:   return "timer"
+        case .focus10Hours: return "brain.head.profile"
+        case .focus50Hours: return "sparkles"
+        case .focus100Hours: return "hourglass"
         }
     }
 

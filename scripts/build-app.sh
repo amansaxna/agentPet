@@ -3,19 +3,22 @@
 # app (bundle id, LSUIElement, working notifications). Ad-hoc signed for local
 # testing. Notarization + DMG + Homebrew are issue #13.
 set -euo pipefail
+export DEVELOPER_DIR="${DEVELOPER_DIR:-/Library/Developer/CommandLineTools}"
 
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
 APP="$ROOT/build/AgentPet.app"
 CONFIG="${1:-release}"
 
-# Build a universal binary (Apple Silicon + Intel) so the app runs on both.
-# Apple Silicon machines still run the native arm64 slice, unchanged.
-ARCHS=(--arch arm64 --arch x86_64)
+# Configure plugin search path for Xcode SwiftUI macros if available
+SWIFT_BUILD_FLAGS=(--build-system native)
+if [ -d "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib/swift/host/plugins" ]; then
+    SWIFT_BUILD_FLAGS+=(-Xswiftc -plugin-path -Xswiftc /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib/swift/host/plugins)
+fi
 
-echo "Building ($CONFIG, universal arm64 + x86_64)..."
-swift build -c "$CONFIG" "${ARCHS[@]}"
-BINDIR="$(swift build -c "$CONFIG" "${ARCHS[@]}" --show-bin-path)"
+echo "Building ($CONFIG)..."
+swift build -c "$CONFIG" "${SWIFT_BUILD_FLAGS[@]}"
+BINDIR="$(swift build -c "$CONFIG" "${SWIFT_BUILD_FLAGS[@]}" --show-bin-path)"
 
 echo "Assembling $APP ..."
 rm -rf "$APP"

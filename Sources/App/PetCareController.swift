@@ -76,6 +76,13 @@ final class PetCareController: ObservableObject {
         mutate(petID: petID) { PetCare.feedTokens(tokens, state: &$0, now: Date()) }
     }
 
+    /// Records focused time (Pomodoro, Timer, or Stopwatch) in seconds.
+    /// Converts directly to XP at 1 XP per minute, feeds the pet, and checks milestones.
+    func recordFocus(seconds: Int, petID: String? = nil) {
+        guard seconds > 0 else { return }
+        mutate(petID: petID) { PetCare.recordFocus(seconds: seconds, state: &$0, now: Date()) }
+    }
+
     /// Rolls the daily counters over; UI refresh timers call this so "today"
     /// numbers reset at midnight even with no feeding events.
     func refreshDay() {

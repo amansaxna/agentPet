@@ -17,6 +17,10 @@ import * as projectnames from "./projectnames";
 import * as sync from "./sync";
 import * as history from "./history";
 import * as limits from "./limits";
+import * as pomodoro from "./pomodoro";
+import * as reminders from "./reminders";
+import * as goals from "./goals";
+import * as quotes from "./quotes";
 import { agentLabel } from "./state";
 import { tokenString } from "./statscard";
 
@@ -50,6 +54,8 @@ function initTabs() {
       });
       if (b.dataset.tab === "care") { renderCare(); renderSync(); void refreshLimits(); }
       if (b.dataset.tab === "history") renderHistory();
+      if (b.dataset.tab === "focus") renderFocusSettings();
+      if (b.dataset.tab === "goals") renderGoalsSettings();
     };
   });
 }
@@ -1548,6 +1554,486 @@ function initSliders() {
   });
 }
 
+// -------------------------------------------------------- Focus & Reminders ----
+function initFocusTab() {
+  const pomoSaveBtn = document.getElementById("pomo-save-btn");
+  if (pomoSaveBtn) {
+    pomoSaveBtn.onclick = () => {
+      const cfg = pomodoro.loadConfig();
+      cfg.focusMinutes = Math.max(1, parseInt((document.getElementById("pomo-focus-mins") as HTMLInputElement).value || "25", 10));
+      cfg.shortBreakMinutes = Math.max(1, parseInt((document.getElementById("pomo-short-mins") as HTMLInputElement).value || "5", 10));
+      cfg.longBreakMinutes = Math.max(1, parseInt((document.getElementById("pomo-long-mins") as HTMLInputElement).value || "15", 10));
+      cfg.cyclesBeforeLongBreak = Math.max(1, parseInt((document.getElementById("pomo-cycles") as HTMLInputElement).value || "4", 10));
+      cfg.autoStartBreak = (document.getElementById("pomo-autobreak") as HTMLInputElement).checked;
+      cfg.autoStartFocus = (document.getElementById("pomo-autofocus") as HTMLInputElement).checked;
+      cfg.soundEnabled = (document.getElementById("pomo-sound") as HTMLInputElement).checked;
+      cfg.defaultSubjectTag = (document.getElementById("pomo-def-subject") as HTMLInputElement).value.trim() || "Focus";
+      pomodoro.saveConfig(cfg);
+      pomoSaveBtn.textContent = "Saved ✓";
+      setTimeout(() => { pomoSaveBtn.textContent = "Save Pomodoro Settings"; }, 1500);
+    };
+  }
+
+  // Water inputs
+  const waterEnabled = document.getElementById("rem-water-enabled") as HTMLInputElement;
+  const waterInterval = document.getElementById("rem-water-interval") as HTMLInputElement;
+  const waterStart = document.getElementById("rem-water-start") as HTMLInputElement;
+  const waterEnd = document.getElementById("rem-water-end") as HTMLInputElement;
+  const waterSound = document.getElementById("rem-water-sound") as HTMLInputElement;
+
+  const saveWater = () => {
+    const rules = reminders.getRules();
+    const water = rules.find((r) => r.kind === "water");
+    if (water) {
+      reminders.updateRule(water.id, {
+        enabled: waterEnabled.checked,
+        intervalMinutes: parseInt(waterInterval.value, 10) || 45,
+        activeHoursStart: waterStart.value || "08:00",
+        activeHoursEnd: waterEnd.value || "23:00",
+        soundEnabled: waterSound.checked,
+      });
+    }
+  };
+
+  waterEnabled?.addEventListener("change", saveWater);
+  waterInterval?.addEventListener("change", saveWater);
+  waterStart?.addEventListener("change", saveWater);
+  waterEnd?.addEventListener("change", saveWater);
+  waterSound?.addEventListener("change", saveWater);
+
+  document.getElementById("rem-water-reset")?.addEventListener("click", () => {
+    reminders.resetWaterCups();
+    renderFocusSettings();
+  });
+
+  // Take time inputs
+  const ttEnabled = document.getElementById("rem-taketime-enabled") as HTMLInputElement;
+  const ttInterval = document.getElementById("rem-taketime-interval") as HTMLInputElement;
+  const ttSound = document.getElementById("rem-taketime-sound") as HTMLInputElement;
+
+  const saveTakeTime = () => {
+    const rules = reminders.getRules();
+    const tt = rules.find((r) => r.kind === "takeTime");
+    if (tt) {
+      reminders.updateRule(tt.id, {
+        enabled: ttEnabled.checked,
+        intervalMinutes: parseInt(ttInterval.value, 10) || 60,
+        soundEnabled: ttSound.checked,
+      });
+    }
+  };
+
+  ttEnabled?.addEventListener("change", saveTakeTime);
+  ttInterval?.addEventListener("change", saveTakeTime);
+  ttSound?.addEventListener("change", saveTakeTime);
+
+  // Custom reminder schedule type toggle
+  const schedType = document.getElementById("rem-new-type") as HTMLSelectElement;
+  schedType?.addEventListener("change", () => {
+    const isInterval = schedType.value === "interval";
+    const iWrap = document.getElementById("rem-new-interval-wrap");
+    const tWrap = document.getElementById("rem-new-time-wrap");
+    if (iWrap) iWrap.style.display = isInterval ? "block" : "none";
+    if (tWrap) tWrap.style.display = isInterval ? "none" : "block";
+  });
+
+  // Add custom reminder button
+  document.getElementById("rem-add-btn")?.addEventListener("click", () => {
+    const titleEl = document.getElementById("rem-new-title") as HTMLInputElement;
+    const msgEl = document.getElementById("rem-new-message") as HTMLInputElement;
+    const intEl = document.getElementById("rem-new-interval") as HTMLInputElement;
+    const timeEl = document.getElementById("rem-new-time") as HTMLInputElement;
+    const snoozeEl = document.getElementById("rem-new-snooze") as HTMLSelectElement;
+    const soundEl = document.getElementById("rem-new-sound") as HTMLInputElement;
+
+    const title = titleEl.value.trim();
+    if (!title) return;
+
+    reminders.addCustomReminder({
+      title,
+      message: msgEl.value.trim(),
+      scheduleType: schedType.value as reminders.ReminderScheduleType,
+      intervalMinutes: parseInt(intEl.value, 10) || 60,
+      dailyTime: timeEl.value || "18:00",
+      soundEnabled: soundEl.checked,
+      defaultSnoozeMinutes: parseInt(snoozeEl.value, 10) || 10,
+    });
+
+    titleEl.value = "";
+    msgEl.value = "";
+    renderFocusSettings();
+  });
+}
+
+function renderFocusSettings() {
+  const cfg = pomodoro.loadConfig();
+  const setVal = (id: string, val: string | number) => {
+    const el = document.getElementById(id) as HTMLInputElement | null;
+    if (el) el.value = String(val);
+  };
+  const setChecked = (id: string, chk: boolean) => {
+    const el = document.getElementById(id) as HTMLInputElement | null;
+    if (el) el.checked = chk;
+  };
+
+  setVal("pomo-focus-mins", cfg.focusMinutes);
+  setVal("pomo-short-mins", cfg.shortBreakMinutes);
+  setVal("pomo-long-mins", cfg.longBreakMinutes);
+  setVal("pomo-cycles", cfg.cyclesBeforeLongBreak);
+  setChecked("pomo-autobreak", cfg.autoStartBreak);
+  setChecked("pomo-autofocus", cfg.autoStartFocus);
+  setChecked("pomo-sound", cfg.soundEnabled);
+  setVal("pomo-def-subject", cfg.defaultSubjectTag);
+
+  // Water & TakeTime rules
+  const rules = reminders.getRules();
+  const water = rules.find((r) => r.kind === "water");
+  if (water) {
+    setChecked("rem-water-enabled", water.enabled);
+    setVal("rem-water-interval", water.intervalMinutes);
+    setVal("rem-water-start", water.activeHoursStart || "08:00");
+    setVal("rem-water-end", water.activeHoursEnd || "23:00");
+    setChecked("rem-water-sound", water.soundEnabled);
+  }
+  const cups = reminders.getWaterCupsToday();
+  const cupsLabel = document.getElementById("rem-water-today-label");
+  if (cupsLabel) cupsLabel.textContent = `${cups} ${cups === 1 ? 'cup' : 'cups'} logged today`;
+
+  const tt = rules.find((r) => r.kind === "takeTime");
+  if (tt) {
+    setChecked("rem-taketime-enabled", tt.enabled);
+    setVal("rem-taketime-interval", tt.intervalMinutes);
+    setChecked("rem-taketime-sound", tt.soundEnabled);
+  }
+
+  // Custom reminders
+  const customList = document.getElementById("rem-custom-list");
+  if (customList) {
+    const customRules = rules.filter((r) => r.kind === "custom");
+    if (!customRules.length) {
+      customList.innerHTML = `<div class="row cap dim center" style="padding:14px">No custom reminders yet. Add one below.</div>`;
+    } else {
+      customList.innerHTML = customRules.map((r) => {
+        const schedText = r.scheduleType === "interval" ? `Every ${r.intervalMinutes}m` : `Daily at ${r.dailyTime}`;
+        return `
+          <div class="row">
+            <span class="rt">
+              <b>${esc(r.title)}</b>
+              <span class="cap">${esc(r.message)} · ${schedText} · Snooze ${r.defaultSnoozeMinutes}m</span>
+            </span>
+            <div style="display:flex; align-items:center; gap:8px">
+              <label style="cursor:pointer">
+                <input type="checkbox" class="rem-toggle-chk" data-id="${r.id}" ${r.enabled ? 'checked' : ''} />
+              </label>
+              <button class="mini danger rem-del-btn" data-id="${r.id}">Delete</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      customList.querySelectorAll<HTMLInputElement>(".rem-toggle-chk").forEach((chk) => {
+        chk.onchange = () => {
+          reminders.updateRule(chk.dataset.id!, { enabled: chk.checked });
+        };
+      });
+      customList.querySelectorAll<HTMLButtonElement>(".rem-del-btn").forEach((btn) => {
+        btn.onclick = () => {
+          reminders.deleteReminder(btn.dataset.id!);
+          renderFocusSettings();
+        };
+      });
+    }
+  }
+}
+
+// -------------------------------------------------------- Targets & Quotes ----
+function initGoalsTab() {
+  document.getElementById("goal-load-gate-btn")?.addEventListener("click", () => {
+    const template = goals.createGateStarterTemplate();
+    goals.addGoal(template);
+    renderGoalsSettings();
+  });
+
+  const startEl = document.getElementById("goal-new-start") as HTMLInputElement;
+  const targetEl = document.getElementById("goal-new-target") as HTMLInputElement;
+  const now = new Date();
+  if (startEl && !startEl.value) {
+    startEl.value = goals.formatLocalDate(now);
+  }
+  if (targetEl && !targetEl.value) {
+    const future = new Date(now.getTime() + 90 * 86_400_000);
+    targetEl.value = goals.formatLocalDate(future);
+  }
+
+  document.getElementById("goal-save-btn")?.addEventListener("click", () => {
+    const titleEl = document.getElementById("goal-new-title") as HTMLInputElement;
+    const catEl = document.getElementById("goal-new-cat") as HTMLSelectElement;
+    const hoursEl = document.getElementById("goal-new-daily-hours") as HTMLInputElement;
+    const msEl = document.getElementById("goal-new-milestones") as HTMLTextAreaElement;
+    const notesEl = document.getElementById("goal-new-notes") as HTMLInputElement;
+    const primaryEl = document.getElementById("goal-new-primary") as HTMLInputElement;
+
+    const title = titleEl.value.trim();
+    if (!title) return;
+
+    const msLines = msEl.value.split("\n").map((s) => s.trim()).filter(Boolean);
+    const milestones = msLines.map((line, idx) => ({
+      id: `ms_${Date.now()}_${idx}`,
+      title: line,
+      completed: false,
+    }));
+
+    goals.addGoal({
+      title,
+      category: catEl.value as goals.GoalCategory,
+      startDate: startEl.value || goals.formatLocalDate(new Date()),
+      targetDate: targetEl.value || goals.formatLocalDate(new Date(Date.now() + 90 * 86_400_000)),
+      dailyTargetMinutes: (parseInt(hoursEl.value, 10) || 4) * 60,
+      milestones,
+      notes: notesEl.value.trim(),
+      isPrimary: primaryEl.checked,
+    });
+
+    titleEl.value = "";
+    msEl.value = "";
+    notesEl.value = "";
+    renderGoalsSettings();
+  });
+
+  const quoteBubble = document.getElementById("quote-bubble-toggle") as HTMLInputElement;
+  const quoteFavsOnly = document.getElementById("quote-favs-only-toggle") as HTMLInputElement;
+  const quoteRot = document.getElementById("quote-rotation-mins") as HTMLInputElement;
+
+  quoteBubble?.addEventListener("change", () => {
+    quotes.updateQuoteConfig({ showInPetBubble: quoteBubble.checked });
+  });
+  quoteFavsOnly?.addEventListener("change", () => {
+    quotes.updateQuoteConfig({ onlyFavorites: quoteFavsOnly.checked });
+  });
+  quoteRot?.addEventListener("change", () => {
+    quotes.updateQuoteConfig({ rotationMinutes: parseInt(quoteRot.value, 10) || 15 });
+  });
+
+  document.getElementById("quote-custom-add-btn")?.addEventListener("click", () => {
+    const textEl = document.getElementById("quote-custom-text") as HTMLInputElement;
+    const authEl = document.getElementById("quote-custom-author") as HTMLInputElement;
+    const catEl = document.getElementById("quote-custom-cat") as HTMLSelectElement;
+
+    const text = textEl.value.trim();
+    if (!text) return;
+
+    quotes.addCustomQuote(text, authEl.value.trim(), catEl.value as quotes.QuoteCategory);
+    textEl.value = "";
+    authEl.value = "";
+    renderGoalsSettings();
+  });
+
+  document.getElementById("quote-browse-filter")?.addEventListener("change", () => {
+    renderQuotesBrowser();
+  });
+}
+
+function renderGoalsSettings() {
+  renderTargetsList();
+  renderQuoteCategoryChips();
+  renderQuotesBrowser();
+
+  const qCfg = quotes.getQuoteConfig();
+  const qb = document.getElementById("quote-bubble-toggle") as HTMLInputElement;
+  if (qb) qb.checked = qCfg.showInPetBubble;
+  const qf = document.getElementById("quote-favs-only-toggle") as HTMLInputElement;
+  if (qf) qf.checked = qCfg.onlyFavorites;
+  const qr = document.getElementById("quote-rotation-mins") as HTMLInputElement;
+  if (qr) qr.value = String(qCfg.rotationMinutes);
+}
+
+function renderTargetsList() {
+  const container = document.getElementById("goals-list");
+  if (!container) return;
+
+  const targetGoals = goals.getGoals();
+  if (!targetGoals.length) {
+    container.innerHTML = `
+      <div class="gcard pad center cap dim" style="padding: 24px;">
+        No targets created yet. Click "Load GATE Exam Starter Template" above or create one below to start your countdown!
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = targetGoals.map((g) => {
+    const m = goals.computeGoalMetrics(g);
+    const pct = Math.round(m.timelineProgress * 100);
+    const msTotal = g.milestones.length;
+    const msDone = g.milestones.filter((x) => x.completed).length;
+
+    const milestonesHtml = g.milestones.map((ms) => `
+      <label class="milestone-item ${ms.completed ? 'completed' : ''}">
+        <input type="checkbox" class="ms-chk" data-goal-id="${g.id}" data-ms-id="${ms.id}" ${ms.completed ? 'checked' : ''} />
+        <span>${esc(ms.title)}</span>
+      </label>
+    `).join("");
+
+    return `
+      <div class="gcard goal-manage-card ${g.isPrimary ? 'is-primary' : ''}">
+        <div class="goal-manage-head">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="goal-cat-pill">${esc(g.category.toUpperCase())}</span>
+            ${g.isPrimary ? '<span class="goal-primary-badge">★ PRIMARY TARGET</span>' : ''}
+          </div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            ${!g.isPrimary ? `<button class="mini goal-make-primary-btn" data-id="${g.id}">Set as Primary</button>` : ''}
+            <button class="mini danger goal-delete-btn" data-id="${g.id}">Delete</button>
+          </div>
+        </div>
+
+        <div class="goal-manage-body">
+          <div class="goal-title-bold">${esc(g.title)}</div>
+          <div class="goal-metrics-row">
+            <span class="goal-stat-highlight">${esc(m.statusLabel)}</span>
+            <span class="dim">·</span>
+            <span class="goal-passed-sub">${esc(m.passedLabel)}</span>
+            <span class="dim">·</span>
+            <span class="dim">Daily: ${(g.dailyTargetMinutes / 60).toFixed(0)}h</span>
+          </div>
+
+          <div class="goal-progress-wrap">
+            <div class="goal-progress-bar" style="width: ${pct}%"></div>
+          </div>
+          <div class="goal-progress-label">
+            <span>Timeline: ${pct}% elapsed</span>
+            <span>Milestones: ${msDone}/${msTotal}</span>
+          </div>
+
+          ${msTotal > 0 ? `
+            <div class="goal-milestones-list">
+              <div class="cap dim" style="margin-bottom:4px">Milestones:</div>
+              ${milestonesHtml}
+            </div>
+          ` : ''}
+
+          ${g.notes ? `<div class="goal-notes-box cap">${esc(g.notes)}</div>` : ''}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  container.querySelectorAll<HTMLInputElement>(".ms-chk").forEach((chk) => {
+    chk.onchange = () => {
+      goals.toggleMilestone(chk.dataset.goalId!, chk.dataset.msId!);
+      renderTargetsList();
+    };
+  });
+
+  container.querySelectorAll<HTMLButtonElement>(".goal-make-primary-btn").forEach((btn) => {
+    btn.onclick = () => {
+      goals.setPrimaryGoal(btn.dataset.id!);
+      renderTargetsList();
+    };
+  });
+
+  container.querySelectorAll<HTMLButtonElement>(".goal-delete-btn").forEach((btn) => {
+    btn.onclick = () => {
+      goals.deleteGoal(btn.dataset.id!);
+      renderTargetsList();
+    };
+  });
+}
+
+function renderQuoteCategoryChips() {
+  const host = document.getElementById("quote-cat-chips");
+  if (!host) return;
+
+  const cfg = quotes.getQuoteConfig();
+  const enabledSet = new Set(cfg.enabledCategories);
+  const allCats: quotes.QuoteCategory[] = ["shloka", "kannada", "gateExam", "goal", "dream", "passion", "life", "saying", "idioms", "api"];
+
+  host.innerHTML = allCats.map((cat) => {
+    const isSel = enabledSet.has(cat);
+    const label = quotes.CATEGORY_LABELS[cat];
+    const color = quotes.CATEGORY_COLORS[cat];
+    const style = isSel
+      ? `background: ${color}25; color: ${color}; border: 1px solid ${color}66;`
+      : `background: rgba(255,255,255,0.04); color: var(--sec); border: 1px solid rgba(255,255,255,0.08);`;
+    return `<button class="quote-chip ${isSel ? 'sel' : ''}" data-cat="${cat}" style="${style}">${esc(label)}</button>`;
+  }).join("");
+
+  host.querySelectorAll<HTMLButtonElement>(".quote-chip").forEach((btn) => {
+    btn.onclick = () => {
+      const cat = btn.dataset.cat as quotes.QuoteCategory;
+      const current = quotes.getQuoteConfig().enabledCategories;
+      let next: quotes.QuoteCategory[];
+      if (current.includes(cat)) {
+        if (current.length === 1) return;
+        next = current.filter((c) => c !== cat);
+      } else {
+        next = [...current, cat];
+      }
+      quotes.updateQuoteConfig({ enabledCategories: next });
+      renderQuoteCategoryChips();
+      renderQuotesBrowser();
+    };
+  });
+}
+
+function renderQuotesBrowser() {
+  const host = document.getElementById("quote-catalog-list");
+  if (!host) return;
+
+  const filter = (document.getElementById("quote-browse-filter") as HTMLSelectElement)?.value || "all";
+  let items = quotes.getAllQuotes();
+
+  if (filter === "favs") {
+    items = items.filter((q) => q.isFavorite);
+  } else if (filter !== "all") {
+    items = items.filter((q) => q.category === filter);
+  }
+
+  if (!items.length) {
+    host.innerHTML = `<div class="row cap dim center" style="padding:18px">No quotes found for this filter.</div>`;
+    return;
+  }
+
+  host.innerHTML = items.map((q) => {
+    const catLabel = quotes.CATEGORY_LABELS[q.category] || q.category;
+    const catColor = quotes.CATEGORY_COLORS[q.category] || "#3b82f6";
+    return `
+      <div class="row" style="align-items:flex-start; padding: 10px 14px;">
+        <span class="rt" style="flex:1;">
+          <div style="margin-bottom:3px;">
+            <span class="pop-quote-cat" style="background: ${catColor}20; color: ${catColor} font-size:10px; padding:1px 6px;">
+              ${esc(catLabel)}
+            </span>
+            ${q.isCustom ? '<span class="dim" style="font-size:10px; margin-left:4px;">(Custom)</span>' : ''}
+          </div>
+          <div style="font-size:12px; font-weight:500;">“${esc(q.text)}”</div>
+          ${q.authorOrMeaning ? `<div class="cap dim" style="margin-top:2px;">— ${esc(q.authorOrMeaning)}</div>` : ''}
+        </span>
+        <div style="display:flex; align-items:center; gap:6px; margin-left:8px;">
+          <button class="mini quote-star-btn ${q.isFavorite ? 'fav' : ''}" data-id="${q.id}">
+            ${q.isFavorite ? '★' : '☆'}
+          </button>
+          ${q.isCustom ? `<button class="mini danger quote-del-btn" data-id="${q.id}">✕</button>` : ''}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  host.querySelectorAll<HTMLButtonElement>(".quote-star-btn").forEach((btn) => {
+    btn.onclick = () => {
+      quotes.toggleQuoteFavorite(btn.dataset.id!);
+      renderQuotesBrowser();
+    };
+  });
+
+  host.querySelectorAll<HTMLButtonElement>(".quote-del-btn").forEach((btn) => {
+    btn.onclick = () => {
+      quotes.deleteCustomQuote(btn.dataset.id!);
+      renderQuotesBrowser();
+    };
+  });
+}
+
 initTabs();
 initLang();
 loadAgents();
@@ -1566,6 +2052,8 @@ initMisc();
 initBackup();
 initDemo();
 initOnboarding();
+initFocusTab();
+initGoalsTab();
 
 // First-run welcome overlay (opened as settings.html?onboarding=1 by the tray /
 // Rust on first launch). Mirrors the macOS OnboardingView: pick a pet, connect

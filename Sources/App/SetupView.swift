@@ -13,11 +13,11 @@ struct SetupView: View {
     /// panel can slide in on the right. Provided by SettingsWindowController.
     var onResize: (CGFloat) -> Void = { _ in }
 
-    enum Tab { case general, pet, care, bubble, history, about }
+    enum Tab { case general, agentStatus, pet, focus, goals, quotes, reminders, care, analysis, history, about }
     @State private var tab: Tab = .general
     @State private var demoOpen = false
 
-    private let baseWidth: CGFloat = 640
+    private let baseWidth: CGFloat = 820
     private let demoWidth: CGFloat = 740
 
     private var selectedPack: ImagePetPack? {
@@ -37,7 +37,7 @@ struct SetupView: View {
                 SettingsDemoPanel(onClose: { setDemo(false) }).frame(width: demoWidth)
             }
         }
-        .frame(width: demoOpen ? baseWidth + demoWidth : baseWidth, height: 600)
+        .frame(width: demoOpen ? baseWidth + demoWidth : baseWidth, height: 620)
         .preferredColorScheme(.dark)
         .noFocusRing()
         .environment(\.locale, appLang.locale)
@@ -52,13 +52,23 @@ struct SetupView: View {
             Group {
                 switch tab {
                 case .general:
-                    GeneralTab(model: model, pet: pet)
+                    GeneralTab(model: model, pet: pet, onNavigateToAgentStatus: { tab = .agentStatus })
+                case .agentStatus:
+                    BubbleSettingsView()
                 case .pet:
                     PetTab(pet: pet, imagePets: imagePets, model: model, selectedPack: selectedPack)
+                case .focus:
+                    FocusTabView()
+                case .goals:
+                    GoalsTabView()
+                case .quotes:
+                    QuotesTabView()
+                case .reminders:
+                    RemindersTabView()
                 case .care:
                     CareTabView()
-                case .bubble:
-                    BubbleSettingsView()
+                case .analysis:
+                    WorkAnalysisView()
                 case .history:
                     HistoryTabView()
                 case .about:
@@ -86,16 +96,24 @@ struct SetupView: View {
     }
 
     private var tabBar: some View {
-        HStack(spacing: 8) {
-            TabButton(icon: "gearshape.fill", label: "General", selected: tab == .general) { tab = .general }
-            TabButton(icon: "pawprint.fill", label: "Pet", selected: tab == .pet) { tab = .pet }
-            TabButton(icon: "fork.knife", label: "Care", selected: tab == .care) { tab = .care }
-            TabButton(icon: "bubble.left.and.bubble.right.fill", label: "Bubble", selected: tab == .bubble) { tab = .bubble }
-            TabButton(icon: "clock.arrow.circlepath", label: "History", selected: tab == .history) { tab = .history }
-            TabButton(icon: "heart.fill", label: "About", selected: tab == .about) { tab = .about }
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                TabButton(icon: "gearshape.fill", label: "General", selected: tab == .general) { tab = .general }
+                TabButton(icon: "sparkles.tv", label: "Agent Status", selected: tab == .agentStatus) { tab = .agentStatus }
+                TabButton(icon: "pawprint.fill", label: "Pet", selected: tab == .pet) { tab = .pet }
+                TabButton(icon: "timer", label: "Focus", selected: tab == .focus) { tab = .focus }
+                TabButton(icon: "target", label: "Goals", selected: tab == .goals) { tab = .goals }
+                TabButton(icon: "quote.bubble.fill", label: "Quotes", selected: tab == .quotes) { tab = .quotes }
+                TabButton(icon: "bell.badge.fill", label: "Reminders", selected: tab == .reminders) { tab = .reminders }
+                TabButton(icon: "fork.knife", label: "Care", selected: tab == .care) { tab = .care }
+                TabButton(icon: "chart.bar.xaxis", label: "Analysis", selected: tab == .analysis) { tab = .analysis }
+                TabButton(icon: "clock.arrow.circlepath", label: "History", selected: tab == .history) { tab = .history }
+                TabButton(icon: "heart.fill", label: "About", selected: tab == .about) { tab = .about }
+            }
+            .padding(.horizontal, 8)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
     }
 }
 
@@ -107,11 +125,14 @@ private struct TabButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: icon).font(.system(size: 19))
-                Text(label).font(.system(size: 11))
+            VStack(spacing: 3) {
+                Image(systemName: icon).font(.system(size: 16))
+                Text(label)
+                    .font(.system(size: 10, weight: selected ? .semibold : .regular))
+                    .lineLimit(1)
             }
-            .frame(width: 78, height: 48)
+            .frame(minWidth: 62, maxWidth: 74, minHeight: 46)
+            .padding(.horizontal, 4)
             .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(selected ? Color.systemAccent.opacity(0.22) : .clear))
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -242,6 +263,7 @@ private struct SoundRow: View {
 private struct GeneralTab: View {
     @ObservedObject var model: SettingsModel
     @ObservedObject var pet: PetController
+    var onNavigateToAgentStatus: () -> Void = {}
     @ObservedObject private var sound = SoundSettings.shared
     @ObservedObject private var appLang = AppLanguage.shared
     @ObservedObject private var breaks = BreakReminderSettings.shared
@@ -352,6 +374,29 @@ private struct GeneralTab: View {
                          onPlay: { sound.play(.waiting) },
                          onUpload: { sound.upload(for: .waiting) },
                          onReset: { sound.resetToDefault(.waiting) })
+            }
+
+            Section("Agentic Work Status & Bubble") {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Customize Agentic Status & Activity Phrases")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Edit live status rows, multi-agent layout (list/carousel/compact), chef/explorer/scientist phrases, icons, and token counters.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button {
+                        onNavigateToAgentStatus()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text("Edit Status Settings")
+                            Image(systemName: "chevron.right")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+                .padding(.vertical, 3)
             }
 
             Section("Agent integrations") {

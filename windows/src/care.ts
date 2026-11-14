@@ -21,6 +21,9 @@ export interface CareState {
   lastFedDayKey: string | null;
   days: Record<string, number>; // dayKey -> tokens (last 14)
   unlockedAchievements: string[];
+  focusSecondsToday?: number;
+  totalFocusSeconds?: number;
+  focusCarrySeconds?: number;
 }
 
 export function emptyState(): CareState {
@@ -29,25 +32,29 @@ export function emptyState(): CareState {
     totalTokens: 0, totalMeals: 0, lastFedAt: null,
     dayKey: dayKey(new Date()), streakDays: 0, lastFedDayKey: null, days: {},
     unlockedAchievements: [],
+    focusSecondsToday: 0, totalFocusSeconds: 0, focusCarrySeconds: 0,
   };
 }
 
-// ---- achievements (14 badges, must match PetCare.swift) ---------------------
+// ---- achievements (18 badges, must match PetCare.swift) ---------------------
 
 export const ACHIEVEMENTS = [
   "firstMeal", "sessions100", "sessions500", "tokens1M", "tokens10M", "tokens50M",
   "level5", "level10", "level20", "level35", "streak7", "streak14", "streak30", "nightOwl",
+  "focus1Hour", "focus10Hours", "focus50Hours", "focus100Hours",
 ];
 export const ACH_NAME: Record<string, string> = {
   firstMeal: "First Meal", sessions100: "100 Sessions", sessions500: "500 Sessions",
   tokens1M: "1M Tokens", tokens10M: "10M Tokens", tokens50M: "50M Tokens",
   level5: "Level 5", level10: "Level 10", level20: "Level 20", level35: "Level 35",
   streak7: "7-Day Streak", streak14: "14-Day Streak", streak30: "30-Day Streak", nightOwl: "Night Owl",
+  focus1Hour: "Deep Focus", focus10Hours: "Flow State", focus50Hours: "Zen Master", focus100Hours: "Grandmaster",
 };
 export const ACH_ICON: Record<string, string> = {
   firstMeal: "🍽", sessions100: "🏆", sessions500: "🥇", tokens1M: "🔥", tokens10M: "⚡",
   tokens50M: "💥", level5: "⭐", level10: "🌟", level20: "🛡️", level35: "👑",
   streak7: "📅", streak14: "📆", streak30: "🗓️", nightOwl: "🌙",
+  focus1Hour: "⏱", focus10Hours: "🧠", focus50Hours: "✨", focus100Hours: "⌛",
 };
 
 function checkAchievements(s: CareState, hour: number): Set<string> {
@@ -67,6 +74,11 @@ function checkAchievements(s: CareState, hour: number): Set<string> {
   if (s.streakDays >= 14) r.add("streak14");
   if (s.streakDays >= 30) r.add("streak30");
   if (hour < 6 && s.totalMeals >= 1) r.add("nightOwl");
+  const focus = s.totalFocusSeconds || 0;
+  if (focus >= 3_600) r.add("focus1Hour");
+  if (focus >= 36_000) r.add("focus10Hours");
+  if (focus >= 180_000) r.add("focus50Hours");
+  if (focus >= 360_000) r.add("focus100Hours");
   return r;
 }
 
@@ -190,6 +202,30 @@ export function recordMeal(s: CareState, now = new Date()): number {
   markFed(s, now);
   unlockNewAchievements(s, now);
   return MEAL_XP;
+}
+
+export const SECONDS_PER_FOCUS_XP = 60;
+
+/** Records focused study/work time in seconds, converts directly to XP at 1 XP / min. */
+export function recordFocus(s: CareState, seconds: number, now = new Date()): number {
+  if (seconds <= 0) return 0;
+  rollover(s, now);
+  s.totalFocusSeconds = (s.totalFocusSeconds || 0) + seconds;
+  s.focusSecondsToday = (s.focusSecondsToday || 0) + seconds;
+  const pool = (s.focusCarrySeconds || 0) + seconds;
+  const gained = Math.floor(pool / SECONDS_PER_FOCUS_XP);
+  s.focusCarrySeconds = pool % SECONDS_PER_FOCUS_XP;
+  s.xp += gained;
+  markFed(s, now);
+  unlockNewAchievements(s, now);
+  return gained;
+}
+
+export function formattedFocus(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
 /** Tokens per day for the trailing `count` days, oldest first, for the chart. */

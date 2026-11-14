@@ -33,7 +33,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         // A normal window (not NSPanel) so SwiftUI text fields reliably receive
         // keyboard input. Settings intentionally takes focus (shows a Dock icon).
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 640, height: 600),
+            contentRect: NSRect(x: 0, y: 0, width: 820, height: 620),
             styleMask: [.titled, .closable],
             backing: .buffered, defer: false
         )

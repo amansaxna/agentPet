@@ -14,6 +14,10 @@ import * as reactive from "./reactive";
 import * as projectpets from "./projectpets";
 import * as limits from "./limits";
 import { projectLabel } from "./projectnames";
+import * as reminders from "./reminders";
+import * as pomodoro from "./pomodoro";
+import * as quotes from "./quotes";
+import { focusMusic } from "./focusmusic";
 
 // Which project THIS pet window represents. `null` = the main window (the
 // default single pet). Split-pet spawns extra windows with `?project=<id>`.
@@ -193,6 +197,16 @@ function evaluateCareMetrics() {
 }
 
 function pickMoodLine(mood: string) {
+  if (mood === "idle") {
+    const quoteCfg = quotes.getQuoteConfig();
+    if (quoteCfg.showInPetBubble) {
+      const q = quotes.getCurrentQuote();
+      if (q) {
+        moodLine = `“${q.text}” — ${q.category}`;
+        return;
+      }
+    }
+  }
   // Custom/system pools; working/waiting fall back to the PetChat lines so the
   // simple-bubble mode (multi-agent off) always has something to say.
   let pool = bubbleLines(null, mood);
@@ -201,6 +215,8 @@ function pickMoodLine(mood: string) {
   if (mood === "idle" && limits.limitLow(limits.cached())) pool = [...pool, ...limits.ANXIOUS.map(t)];
   moodLine = pool.length ? pool[Math.floor(Math.random() * pool.length)] : "";
 }
+
+let quoteDismissed = false;
 
 function render() {
   const sessions = store.active().filter((s) => ownsProject(s.project));
@@ -223,6 +239,65 @@ function render() {
     pickMoodLine(resolved === "idle" ? "idle" : "done");
   }
   wasCelebrating = celebrating;
+
+  // Due reminders and Pomodoro take priority when no coding agents are working
+  const dueList = reminders.checkDueReminders();
+  const pomo = pomodoro.loadState();
+
+  if (dueList.length > 0 && !sessions.length && !celebrating) {
+    const due = dueList[0];
+    pet.setState("waiting");
+    bubble.renderReminder(
+      due,
+      () => {
+        reminders.completeReminder(due.rule.id);
+        flashReactive(due.kind === "water" ? `Hydrated! 💧 Total: ${reminders.getWaterCupsToday()}` : "Done! ✅");
+        render();
+      },
+      (mins) => {
+        reminders.snoozeReminder(due.rule.id, mins);
+        flashReactive("Snoozed 5m 💤");
+        render();
+      },
+      () => {
+        reminders.dismissReminder(due.rule.id);
+        render();
+      }
+    );
+    snugBubble();
+    reportHitRect();
+    return;
+  }
+
+  if (pomo.phase !== "idle" && !sessions.length && !celebrating) {
+    pet.setState(pomo.phase === "focus" ? "working" : "sleepy");
+    bubble.renderPomodoro(
+      {
+        phase: pomo.phase,
+        remainingSeconds: pomo.remainingSeconds,
+        isRunning: pomo.isRunning,
+        subject: pomo.subjectTag || "Focus",
+      },
+      () => {
+        if (pomo.isRunning) pomodoro.pause();
+        else pomodoro.resume();
+        render();
+      },
+      () => {
+        pomodoro.reset();
+        render();
+      },
+      () => {
+        focusMusic.toggle();
+        render();
+      },
+      focusMusic.getPlaying()
+    );
+    snugBubble();
+    reportHitRect();
+    return;
+  }
+
   const mood = celebrating ? "celebrate" : resolved;
   pet.setState(mood);
 
@@ -247,6 +322,33 @@ function render() {
     // idle: a persistent quiet line (mac shows it continuously, no blinking)
     if (reactiveActive) {
       bubble.renderLine(reactiveLine);
+    } else if (focusMusic.getPlaying() && (!quotes.getQuoteConfig().showInPetBubble || quoteDismissed)) {
+      bubble.renderMusicBubble(focusMusic.getCurrentStation(), () => {
+        focusMusic.stop();
+        render();
+      });
+    } else if (quotes.getQuoteConfig().showInPetBubble && !quoteDismissed) {
+      const q = quotes.getCurrentQuote();
+      bubble.renderQuote(
+        q,
+        () => { quoteDismissed = false; quotes.getNextQuote(); render(); },
+        () => { quotes.toggleQuoteFavorite(q.id); render(); },
+        () => { quoteDismissed = true; render(); },
+        () => {
+          if (focusMusic.getPlaying()) {
+            focusMusic.stop();
+          } else {
+            focusMusic.play();
+          }
+          render();
+        },
+        focusMusic.getPlaying()
+      );
+    } else if (focusMusic.getPlaying()) {
+      bubble.renderMusicBubble(focusMusic.getCurrentStation(), () => {
+        focusMusic.stop();
+        render();
+      });
     } else if (localStorage.getItem("ap_idle") !== "0") {
       if (!moodLine) pickMoodLine("idle");
       bubble.renderLine(moodLine);

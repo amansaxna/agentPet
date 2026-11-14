@@ -51,6 +51,14 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
         <span id="tab-history">History</span>
       </button>
+      <button class="tab" data-tab="focus">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span id="tab-focus">Focus &amp; Reminders</span>
+      </button>
+      <button class="tab" data-tab="goals">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+        <span id="tab-goals">Targets &amp; Quotes</span>
+      </button>
       <button class="tab" data-tab="about">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
         <span id="tab-about">About</span>
@@ -409,6 +417,360 @@
           <div class="ghead"><span id="t-history">Session history</span><span id="history-count" class="dim"></span></div>
           <div id="history-list" class="history-list"></div>
           <div id="history-empty" class="ghelp" style="display:none">No finished sessions yet. Run an agent and they'll appear here.</div>
+        </div>
+      </div>
+
+      <!-- ========================= FOCUS & REMINDERS ========================= -->
+      <div class="page" data-page="focus">
+        <!-- Pomodoro Timer Configuration -->
+        <div class="group">
+          <div class="ghead">Pomodoro Timer Settings</div>
+          <div class="gcard">
+            <div class="row">
+              <span class="rt">
+                <span>Focus duration</span>
+                <span class="cap">Minutes dedicated to unbroken deep work (5-120 min)</span>
+              </span>
+              <input type="number" id="pomo-focus-mins" min="5" max="120" value="25" style="width: 70px" />
+            </div>
+            <div class="row">
+              <span class="rt">
+                <span>Short break duration</span>
+                <span class="cap">Quick rest between cycles (1-30 min)</span>
+              </span>
+              <input type="number" id="pomo-short-mins" min="1" max="30" value="5" style="width: 70px" />
+            </div>
+            <div class="row">
+              <span class="rt">
+                <span>Long break duration</span>
+                <span class="cap">Extended restorative rest (5-60 min)</span>
+              </span>
+              <input type="number" id="pomo-long-mins" min="5" max="60" value="15" style="width: 70px" />
+            </div>
+            <div class="row">
+              <span class="rt">
+                <span>Cycles before long break</span>
+                <span class="cap">Number of focus intervals before long break</span>
+              </span>
+              <input type="number" id="pomo-cycles" min="1" max="10" value="4" style="width: 70px" />
+            </div>
+            <label class="row">
+              <span class="rt">
+                <span>Auto-start breaks</span>
+                <span class="cap">Automatically start break timer when focus completes</span>
+              </span>
+              <input type="checkbox" id="pomo-autobreak" />
+            </label>
+            <label class="row">
+              <span class="rt">
+                <span>Auto-start next focus</span>
+                <span class="cap">Automatically begin next focus interval when break ends</span>
+              </span>
+              <input type="checkbox" id="pomo-autofocus" />
+            </label>
+            <label class="row">
+              <span class="rt">
+                <span>Sound &amp; audio chime</span>
+                <span class="cap">Play audio cues on focus &amp; break transitions</span>
+              </span>
+              <input type="checkbox" id="pomo-sound" checked />
+            </label>
+            <div class="row">
+              <span class="rt">
+                <span>Default subject tag</span>
+                <span class="cap">Defaults to Primary Target title when left blank</span>
+              </span>
+              <input type="text" id="pomo-def-subject" placeholder="Focus / Exam" style="width: 140px" />
+            </div>
+            <div class="row center">
+              <button class="ghost-btn pill" id="pomo-save-btn">Save Pomodoro Settings</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Built-in Water Reminder -->
+        <div class="group">
+          <div class="ghead">Water Hydration Reminder</div>
+          <div class="gcard">
+            <label class="row">
+              <span class="rt">
+                <span>Water reminder enabled</span>
+                <span class="cap">Gentle nudge to stay hydrated throughout the day</span>
+              </span>
+              <input type="checkbox" id="rem-water-enabled" checked />
+            </label>
+            <div class="row">
+              <span class="rt">
+                <span>Interval (minutes)</span>
+                <span class="cap">How often to remind (e.g. 45 mins)</span>
+              </span>
+              <input type="number" id="rem-water-interval" min="15" max="180" value="45" style="width: 70px" />
+            </div>
+            <div class="row">
+              <span class="rt">
+                <span>Active hours</span>
+                <span class="cap">Only alert within this time window (HH:mm)</span>
+              </span>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <input type="time" id="rem-water-start" value="08:00" />
+                <span class="dim">to</span>
+                <input type="time" id="rem-water-end" value="23:00" />
+              </div>
+            </div>
+            <label class="row">
+              <span class="rt">
+                <span>Sound alert</span>
+                <span class="cap">Play chime when water reminder is due</span>
+              </span>
+              <input type="checkbox" id="rem-water-sound" checked />
+            </label>
+            <div class="row">
+              <span class="rt">
+                <span>Today's hydration intake</span>
+                <span class="cap" id="rem-water-today-label">0 cups logged today</span>
+              </span>
+              <button class="mini" id="rem-water-reset">Reset Count</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Built-in Take Time Reminder -->
+        <div class="group">
+          <div class="ghead">Take Time &amp; Ergonomics Reminder</div>
+          <div class="gcard">
+            <label class="row">
+              <span class="rt">
+                <span>Take Time reminder enabled</span>
+                <span class="cap">Periodic stretch, eye rest &amp; posture prompt</span>
+              </span>
+              <input type="checkbox" id="rem-taketime-enabled" checked />
+            </label>
+            <div class="row">
+              <span class="rt">
+                <span>Break interval (minutes)</span>
+                <span class="cap">Interval between posture &amp; eye breathers (e.g. 60 min)</span>
+              </span>
+              <input type="number" id="rem-taketime-interval" min="20" max="240" value="60" style="width: 70px" />
+            </div>
+            <label class="row">
+              <span class="rt">
+                <span>Sound alert</span>
+                <span class="cap">Play alert sound when breather is due</span>
+              </span>
+              <input type="checkbox" id="rem-taketime-sound" checked />
+            </label>
+          </div>
+        </div>
+
+        <!-- Custom Reminders -->
+        <div class="group">
+          <div class="ghead">Custom Reminders</div>
+          <div class="gcard" id="rem-custom-list"></div>
+        </div>
+
+        <div class="group">
+          <div class="ghead">Add Custom Reminder</div>
+          <div class="gcard pad">
+            <div class="form-row">
+              <label class="cap">Reminder Title</label>
+              <input type="text" id="rem-new-title" placeholder="e.g. GATE Revision Flashcards" />
+            </div>
+            <div class="form-row">
+              <label class="cap">Message Prompt</label>
+              <input type="text" id="rem-new-message" placeholder="e.g. Solve 5 quick formulas before dinner" />
+            </div>
+            <div class="form-row-duo">
+              <div>
+                <label class="cap">Schedule Type</label>
+                <select id="rem-new-type">
+                  <option value="interval">Repeating Interval</option>
+                  <option value="daily">Daily Fixed Time</option>
+                </select>
+              </div>
+              <div id="rem-new-interval-wrap">
+                <label class="cap">Interval (min)</label>
+                <input type="number" id="rem-new-interval" value="90" min="5" max="720" />
+              </div>
+              <div id="rem-new-time-wrap" style="display:none">
+                <label class="cap">Time (HH:mm)</label>
+                <input type="time" id="rem-new-time" value="18:00" />
+              </div>
+            </div>
+            <div class="form-row-duo">
+              <div>
+                <label class="cap">Default Snooze</label>
+                <select id="rem-new-snooze">
+                  <option value="5">5 Minutes</option>
+                  <option value="10" selected>10 Minutes</option>
+                  <option value="15">15 Minutes</option>
+                  <option value="30">30 Minutes</option>
+                </select>
+              </div>
+              <div style="display:flex; align-items:center; margin-top:16px;">
+                <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                  <input type="checkbox" id="rem-new-sound" checked />
+                  <span class="cap">Play Sound</span>
+                </label>
+              </div>
+            </div>
+            <div style="margin-top: 12px; display:flex; justify-content:flex-end;">
+              <button class="prominent pill" id="rem-add-btn">+ Add Reminder</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========================= TARGETS & QUOTES ========================= -->
+      <div class="page" data-page="goals">
+        <!-- Target System -->
+        <div class="group">
+          <div class="ghead" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>Target Goals &amp; Exam Countdown</span>
+            <button class="ghost-btn mini" id="goal-load-gate-btn">⚡ Load GATE Exam Starter Template</button>
+          </div>
+          <div id="goals-list" class="goals-container"></div>
+        </div>
+
+        <div class="group">
+          <div class="ghead">Create New Target</div>
+          <div class="gcard pad">
+            <div class="form-row">
+              <label class="cap">Target Title</label>
+              <input type="text" id="goal-new-title" placeholder="e.g. GATE CS 2027 — Top 100 AIR" />
+            </div>
+            <div class="form-row-duo">
+              <div>
+                <label class="cap">Category</label>
+                <select id="goal-new-cat">
+                  <option value="GATE Exam">GATE Exam</option>
+                  <option value="Learning">Learning</option>
+                  <option value="Career">Career</option>
+                  <option value="Project">Project</option>
+                  <option value="Health">Health</option>
+                  <option value="Personal">Personal</option>
+                </select>
+              </div>
+              <div>
+                <label class="cap">Daily Target (Hours)</label>
+                <input type="number" id="goal-new-daily-hours" value="4" min="1" max="16" />
+              </div>
+            </div>
+            <div class="form-row-duo">
+              <div>
+                <label class="cap">Start Date (Days Passed From)</label>
+                <input type="date" id="goal-new-start" />
+              </div>
+              <div>
+                <label class="cap">Target Date (Exam / Deadline)</label>
+                <input type="date" id="goal-new-target" />
+              </div>
+            </div>
+            <div class="form-row">
+              <label class="cap">Milestones (one per line)</label>
+              <textarea id="goal-new-milestones" rows="3" placeholder="Engineering Mathematics PYQs&#10;Computer Networks Mock Tests&#10;10 Full Length Mock Exams"></textarea>
+            </div>
+            <div class="form-row">
+              <label class="cap">Strategy Notes &amp; Mantras</label>
+              <input type="text" id="goal-new-notes" placeholder="Focus on accuracy over raw speed. Negative marking is lethal." />
+            </div>
+            <div style="margin-top: 12px; display:flex; justify-content:space-between; align-items:center;">
+              <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                <input type="checkbox" id="goal-new-primary" checked />
+                <span class="cap">Set as Primary Goal (displays in Popover &amp; Stats)</span>
+              </label>
+              <button class="prominent pill" id="goal-save-btn">Save Target</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tailored Quotes Configuration -->
+        <div class="group">
+          <div class="ghead">Tailored Quotes &amp; Mantras (10 Categories — Sanskrit, Kannada, GATE, Goals)</div>
+          <div class="gcard pad">
+            <div class="cap" style="margin-bottom:8px">Select categories to include in quote rotation &amp; idle prompts:</div>
+            <div class="quote-cat-chips" id="quote-cat-chips"></div>
+
+            <div class="pop-divider" style="margin: 12px 0"></div>
+
+            <label class="row" style="padding: 6px 0">
+              <span class="rt">
+                <span>Show quotes in desktop pet speech bubble</span>
+                <span class="cap">Periodically display tailored quotes in the idle pet bubble</span>
+              </span>
+              <input type="checkbox" id="quote-bubble-toggle" checked />
+            </label>
+            <label class="row" style="padding: 6px 0">
+              <span class="rt">
+                <span>Only rotate starred favorites</span>
+                <span class="cap">Restrict rotation exclusively to quotes you have starred (★)</span>
+              </span>
+              <input type="checkbox" id="quote-favs-only-toggle" />
+            </label>
+            <div class="row" style="padding: 6px 0">
+              <span class="rt">
+                <span>Rotation frequency</span>
+                <span class="cap">Minutes between rotating to next quote (1-120 min)</span>
+              </span>
+              <input type="number" id="quote-rotation-mins" min="1" max="120" value="15" style="width: 70px" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Add Custom Quote -->
+        <div class="group">
+          <div class="ghead">Add Custom Quote or Mantra</div>
+          <div class="gcard pad">
+            <div class="form-row">
+              <label class="cap">Quote / Mantra Text</label>
+              <input type="text" id="quote-custom-text" placeholder="e.g. Master the concept once, reap marks forever." />
+            </div>
+            <div class="form-row-duo">
+              <div>
+                <label class="cap">Author or Meaning Note</label>
+                <input type="text" id="quote-custom-author" placeholder="e.g. GATE AIR 1 Advice / Timeless Wisdom" />
+              </div>
+              <div>
+                <label class="cap">Category</label>
+                <select id="quote-custom-cat">
+                  <option value="shloka">Sanskrit Shloka</option>
+                  <option value="kannada">Kannada Shloka</option>
+                  <option value="gateExam">GATE Exam</option>
+                  <option value="goal">Goal</option>
+                  <option value="dream">Dream</option>
+                  <option value="passion">Passion</option>
+                  <option value="life">Life</option>
+                  <option value="saying">Saying</option>
+                  <option value="idioms">Idioms</option>
+                  <option value="api">FavQs Live</option>
+                </select>
+              </div>
+            </div>
+            <div style="margin-top: 10px; display:flex; justify-content:flex-end;">
+              <button class="prominent pill" id="quote-custom-add-btn">+ Add Quote</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quotes Catalog Browser -->
+        <div class="group">
+          <div class="ghead" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>Browse Quotes, Shlokas &amp; Idioms Bank</span>
+            <select id="quote-browse-filter" style="font-size:11px; padding:2px 8px;">
+              <option value="all">All 10 Categories</option>
+              <option value="shloka">Sanskrit Shloka</option>
+              <option value="kannada">Kannada Shloka</option>
+              <option value="gateExam">GATE Exam</option>
+              <option value="goal">Goal</option>
+              <option value="dream">Dream</option>
+              <option value="passion">Passion</option>
+              <option value="life">Life</option>
+              <option value="saying">Saying</option>
+              <option value="idioms">Idioms</option>
+              <option value="api">FavQs Live</option>
+              <option value="favs">★ Starred Favorites Only</option>
+            </select>
+          </div>
+          <div class="gcard" id="quote-catalog-list" style="max-height: 340px; overflow-y: auto;"></div>
         </div>
       </div>
 

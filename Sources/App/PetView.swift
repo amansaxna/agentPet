@@ -95,6 +95,12 @@ struct FloatingPetView: View {
     @ObservedObject private var pet = PetController.shared
     @ObservedObject private var bubbleSettings = BubbleSettings.shared
     @ObservedObject private var appLang = AppLanguage.shared
+    @ObservedObject private var reminderCtrl = ReminderController.shared
+    @ObservedObject private var pomoCtrl = PomodoroController.shared
+    @ObservedObject private var focusClock = FocusClockController.shared
+    @ObservedObject private var quoteCtrl = QuoteController.shared
+    @ObservedObject private var dayProgressCtrl = DayProgressController.shared
+    @ObservedObject private var musicCtrl = FocusMusicController.shared
 
     @State private var petDragging = false
     @State private var petDragStartOrigin: NSPoint = .zero
@@ -103,15 +109,42 @@ struct FloatingPetView: View {
     var body: some View {
         VStack(spacing: 2) {
             if pet.showChat && model.petID != nil {
-                // Gate on the sessions the bubble will actually show: if the
-                // state/kind filters hide all of them, drawing AgentBubble
-                // would leave an empty (off-centre, contentless) bubble.
-                if bubbleSettings.multiAgentBubbleEnabled
-                    && !AgentBubble.visible(model.sessions, settings: bubbleSettings).isEmpty {
-                    alignedToPet(AgentBubble(sessions: model.sessions))
-                } else if !model.chatLine.isEmpty {
-                    alignedToPet(ChatBubble(text: model.chatLine,
-                                            projectName: pet.splitPet ? model.projectName : nil))
+                let isFocusActive = pomoCtrl.state.phase != .idle || focusClock.isAnyActive
+                let hasVisibleAgents = bubbleSettings.multiAgentBubbleEnabled
+                    && !AgentBubble.visible(model.sessions, settings: bubbleSettings).isEmpty
+
+                if let due = reminderCtrl.dueReminders.first {
+                    alignedToPet(PetReminderBubble(due: due))
+                } else {
+                    let hasUnderlying = (isFocusActive || hasVisibleAgents)
+                        || (quoteCtrl.config.showInPetBubble && !quoteCtrl.isDismissed)
+                        || !model.chatLine.isEmpty
+                        || musicCtrl.isPlaying
+
+                    alignedToPet(
+                        VStack(spacing: 4) {
+                            if dayProgressCtrl.isChimeBubbleVisible {
+                                PetDayProgressBubble(snapshot: dayProgressCtrl.currentSnapshot, showTail: !hasUnderlying)
+                            }
+
+                            if musicCtrl.isPlaying {
+                                PetMusicBubble(
+                                    station: musicCtrl.currentStation,
+                                    onStop: { musicCtrl.stop() },
+                                    showTail: !(isFocusActive || hasVisibleAgents || (quoteCtrl.config.showInPetBubble && !quoteCtrl.isDismissed) || !model.chatLine.isEmpty)
+                                )
+                            }
+
+                            if isFocusActive || hasVisibleAgents {
+                                AgentBubble(sessions: model.sessions, showPomodoro: isFocusActive)
+                            } else if quoteCtrl.config.showInPetBubble && !quoteCtrl.isDismissed {
+                                PetQuoteBubble(quote: quoteCtrl.currentQuote)
+                            } else if !model.chatLine.isEmpty {
+                                ChatBubble(text: model.chatLine,
+                                                        projectName: pet.splitPet ? model.projectName : nil)
+                            }
+                        }
+                    )
                 }
             }
             PetView(model: model, size: pet.petPoint)
@@ -172,6 +205,7 @@ struct FloatingPetView: View {
         .onPreferenceChange(BubbleWidthKey.self) { bubbleWidth = $0 }
         .animation(.easeInOut(duration: 0.22), value: model.chatLine)
         .animation(.spring(response: 0.35, dampingFraction: 0.7), value: model.sessions.count)
+        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: pomoCtrl.state.phase)
         .animation(.easeInOut, value: pet.showChat)
         // Re-resolve bubble text when the app language changes at runtime.
         .environment(\.locale, appLang.locale)
@@ -248,6 +282,7 @@ private struct GroupedSession: Identifiable {
 /// `tailEdge` controls whether the pointer arrow points down (pet) or up (menu bar).
 struct AgentBubble: View {
     let sessions: [AgentSession]
+    var showPomodoro: Bool = false
     var tailEdge: Edge = .bottom
     @ObservedObject private var settings = BubbleSettings.shared
     @Environment(\.bubbleTailOffset) private var tailOffset
@@ -314,10 +349,14 @@ struct AgentBubble: View {
         groupedSessions.reduce(0) { $0 + $1.count }
     }
 
+    private var totalRows: Int {
+        groupedSessions.count + (showPomodoro ? 1 : 0)
+    }
+
     private var isPetChat: Bool { tailEdge == .bottom }
     // Capsule for single visible row; rounded rect when taller or carousel dots are shown.
     private var useCapsule: Bool {
-        isPetChat && groupedSessions.count <= 1 && settings.displayMode != .compact
+        isPetChat && totalRows <= 1 && settings.displayMode != .compact
     }
 
     var body: some View {
@@ -386,20 +425,27 @@ struct AgentBubble: View {
 
     @ViewBuilder
     private var bubbleContent: some View {
+        if showPomodoro {
+            PomodoroBubbleRow(chatStyle: isPetChat)
+        }
         switch settings.displayMode {
         case .list:
             ForEach(groupedSessions) { group in
                 AgentRow(session: group.session, count: group.count, chatStyle: isPetChat)
             }
         case .carousel:
-            BubbleCarousel(groups: groupedSessions, chatStyle: isPetChat)
+            if !groupedSessions.isEmpty {
+                BubbleCarousel(groups: groupedSessions, chatStyle: isPetChat)
+            }
         case .compact:
-            BubbleCompactLayout(
-                groups: groupedSessions,
-                totalCount: totalSessionCount,
-                chatStyle: isPetChat,
-                textColor: textColor
-            )
+            if !groupedSessions.isEmpty {
+                BubbleCompactLayout(
+                    groups: groupedSessions,
+                    totalCount: totalSessionCount,
+                    chatStyle: isPetChat,
+                    textColor: textColor
+                )
+            }
         }
     }
 
@@ -411,6 +457,169 @@ struct AgentBubble: View {
         }
     }
 }
+
+// MARK: - Focus Session Bubble Row (Pomodoro, Countdown Timer, Stopwatch)
+
+private struct FocusSessionBubbleRow: View {
+    var chatStyle: Bool = false
+    @ObservedObject private var pomoCtrl = PomodoroController.shared
+    @ObservedObject private var focusClock = FocusClockController.shared
+    @ObservedObject private var musicCtrl = FocusMusicController.shared
+    @ObservedObject private var settings = BubbleSettings.shared
+    @Environment(\.animationsEnabled) private var animationsEnabled
+
+    private var primaryPt: CGFloat { settings.fontSize.primaryPt }
+    private var secondaryPt: CGFloat { settings.fontSize.secondaryPt }
+    private var iconPt: CGFloat { settings.fontSize.iconPt }
+    private var rowMaxWidth: CGFloat {
+        chatStyle ? AgentBubble.petContentMaxWidth : AgentBubble.contentMaxWidth
+    }
+
+    private func textColor(_ opacity: Double) -> Color {
+        switch settings.theme {
+        case .light:  return .black.opacity(opacity)
+        case .dark:   return .white.opacity(opacity)
+        case .system: return Color.primary.opacity(opacity)
+        }
+    }
+
+    var body: some View {
+        if pomoCtrl.state.phase != .idle {
+            pomodoroRow
+        } else if focusClock.isTimerActive {
+            timerRow
+        } else if focusClock.isStopwatchActive {
+            stopwatchRow
+        }
+    }
+
+    // Pomodoro Row
+    private var pomodoroRow: some View {
+        let dotColor: Color = {
+            if pomoCtrl.state.isPaused { return Color(red: 0xF5 / 255.0, green: 0x9E / 255.0, blue: 0x0B / 255.0) }
+            switch pomoCtrl.state.phase {
+            case .focus: return Color(red: 0x3B / 255.0, green: 0x82 / 255.0, blue: 0xF6 / 255.0)
+            case .shortBreak, .longBreak: return Color(red: 0.13, green: 0.77, blue: 0.37)
+            case .idle: return Color.gray
+            }
+        }()
+
+        let actionText = pomoCtrl.state.isPaused ? "Paused" : pomoCtrl.state.phase.displayName
+
+        return HStack(alignment: .center, spacing: 5) {
+            StateDot(color: dotColor, spins: !pomoCtrl.state.isPaused, style: settings.dotStyle)
+            Image(systemName: pomoCtrl.state.phase.isBreak ? "cup.and.saucer.fill" : "timer")
+                .font(.system(size: iconPt, weight: .semibold))
+                .foregroundStyle(pomoCtrl.state.phase.isBreak ? Color.green : Color.blue)
+            Text(actionText)
+                .font(.system(size: primaryPt, weight: .semibold))
+                .foregroundStyle(pomoCtrl.state.isPaused ? Color(red: 0xF5 / 255.0, green: 0x9E / 255.0, blue: 0x0B / 255.0) : textColor(0.9))
+                .lineLimit(1)
+            Text(pomoCtrl.state.formattedRemaining)
+                .font(.system(size: secondaryPt, weight: .semibold))
+                .foregroundStyle(textColor(0.65)).monospacedDigit().lineLimit(1)
+            actionButtons(
+                isPaused: pomoCtrl.state.isPaused,
+                onToggle: { pomoCtrl.state.isPaused ? pomoCtrl.resume() : pomoCtrl.pause() },
+                onStop: { pomoCtrl.stop() }
+            )
+        }
+        .frame(maxWidth: rowMaxWidth, alignment: .leading)
+    }
+
+    // Countdown Timer Row
+    private var timerRow: some View {
+        let tState = focusClock.timerState
+        let isPaused = (tState.state == .paused)
+        let dotColor: Color = isPaused ? Color.orange : Color(red: 0x3B / 255.0, green: 0x82 / 255.0, blue: 0xF6 / 255.0)
+        let actionText = isPaused ? "Paused" : "Timer"
+
+        return HStack(alignment: .center, spacing: 5) {
+            StateDot(color: dotColor, spins: !isPaused, style: settings.dotStyle)
+            Image(systemName: "timer")
+                .font(.system(size: iconPt, weight: .semibold))
+                .foregroundStyle(Color.cyan)
+            Text(actionText)
+                .font(.system(size: primaryPt, weight: .semibold))
+                .foregroundStyle(isPaused ? Color.orange : textColor(0.9))
+                .lineLimit(1)
+            Text(tState.formattedRemaining)
+                .font(.system(size: secondaryPt, weight: .semibold))
+                .foregroundStyle(textColor(0.65)).monospacedDigit().lineLimit(1)
+            actionButtons(
+                isPaused: isPaused,
+                onToggle: { isPaused ? focusClock.resumeTimer() : focusClock.pauseTimer() },
+                onStop: { focusClock.stopTimer() }
+            )
+        }
+        .frame(maxWidth: rowMaxWidth, alignment: .leading)
+    }
+
+    // Stopwatch Row
+    private var stopwatchRow: some View {
+        let sState = focusClock.stopwatchState
+        let isPaused = (sState.state == .paused)
+        let dotColor: Color = isPaused ? Color.orange : Color.green
+        let actionText = isPaused ? "Paused" : "Stopwatch"
+
+        return HStack(alignment: .center, spacing: 5) {
+            StateDot(color: dotColor, spins: !isPaused, style: settings.dotStyle)
+            Image(systemName: "stopwatch")
+                .font(.system(size: iconPt, weight: .semibold))
+                .foregroundStyle(Color.teal)
+            Text(actionText)
+                .font(.system(size: primaryPt, weight: .semibold))
+                .foregroundStyle(isPaused ? Color.orange : textColor(0.9))
+                .lineLimit(1)
+            Text(sState.formattedElapsed)
+                .font(.system(size: secondaryPt, weight: .semibold))
+                .foregroundStyle(textColor(0.65)).monospacedDigit().lineLimit(1)
+            actionButtons(
+                isPaused: isPaused,
+                onToggle: { isPaused ? focusClock.resumeStopwatch() : focusClock.pauseStopwatch() },
+                onStop: { focusClock.stopStopwatch() }
+            )
+        }
+        .frame(maxWidth: rowMaxWidth, alignment: .leading)
+    }
+
+    private func actionButtons(isPaused: Bool, onToggle: @escaping () -> Void, onStop: @escaping () -> Void) -> some View {
+        HStack(spacing: 3) {
+            Button {
+                musicCtrl.togglePlay()
+            } label: {
+                Image(systemName: musicCtrl.isPlaying ? "speaker.wave.2.fill" : "music.note")
+                    .font(.system(size: 7.5, weight: .bold))
+                    .foregroundStyle(musicCtrl.isPlaying ? Color.cyan : textColor(0.75))
+                    .frame(width: 15, height: 15)
+                    .background(Circle().fill(musicCtrl.isPlaying ? Color.cyan.opacity(0.18) : textColor(0.08)))
+            }
+            .buttonStyle(.plain)
+            .help(musicCtrl.isPlaying ? "Stop Focus Music" : "Play Focus Music")
+
+            Button(action: onToggle) {
+                Image(systemName: isPaused ? "play.fill" : "pause.fill")
+                    .font(.system(size: 7.5, weight: .bold))
+                    .foregroundStyle(textColor(0.75))
+                    .frame(width: 15, height: 15)
+                    .background(Circle().fill(textColor(0.08)))
+            }
+            .buttonStyle(.plain)
+
+            Button(action: onStop) {
+                Image(systemName: "stop.fill")
+                    .font(.system(size: 6.5, weight: .bold))
+                    .foregroundStyle(Color.red.opacity(0.85))
+                    .frame(width: 15, height: 15)
+                    .background(Circle().fill(Color.red.opacity(0.12)))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.leading, 2)
+    }
+}
+
+private typealias PomodoroBubbleRow = FocusSessionBubbleRow
 
 // MARK: - Carousel (one agent at a time)
 
@@ -1243,17 +1452,16 @@ struct ChatBubble: View {
                 Text(text)
                     .font(.system(size: settings.fontSize.primaryPt, weight: .medium))
                     .foregroundStyle(textColor)
-                    .contentTransition(.opacity)   // cross-fade text changes instead of a hard swap (no flicker)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                    .contentTransition(.opacity)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(4)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
-            .background(Capsule().fill(fill))
-            .overlay(Capsule().strokeBorder(borderColor, lineWidth: 1))
-            // Flatten to one layer so the shadow traces the capsule's
-            // rounded silhouette instead of its rectangular bounding box
-            // (SwiftUI draws boxy shadows on composed views otherwise).
+            .frame(maxWidth: 280)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(fill))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(borderColor, lineWidth: 1))
             .compositingGroup()
             .shadow(color: .black.opacity(0.18), radius: 5, y: 2)
             Triangle()
@@ -1261,8 +1469,538 @@ struct ChatBubble: View {
                 .frame(width: 12, height: 7)
                 .offset(x: tailOffset)
         }
+        .frame(maxWidth: 290)
+    }
+}
+
+// MARK: - Desktop Pet Focus Music Capsule Bubble
+
+struct PetMusicBubble: View {
+    let station: FocusMusicStation
+    let onStop: () -> Void
+    var showTail: Bool = true
+    @ObservedObject private var settings = BubbleSettings.shared
+    @Environment(\.bubbleTailOffset) private var tailOffset
+
+    private var fill: Color {
+        switch settings.theme {
+        case .light:  return Color.white.opacity(settings.opacity)
+        case .dark:   return Color(nsColor: .windowBackgroundColor).opacity(settings.opacity)
+        case .system: return Color(nsColor: .textBackgroundColor).opacity(settings.opacity)
+        }
+    }
+
+    private var stroke: Color {
+        switch settings.theme {
+        case .light:  return .black.opacity(0.08)
+        case .dark:   return .white.opacity(0.15)
+        case .system: return Color.primary.opacity(0.1)
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "music.note")
+                    .font(.system(size: 9.5, weight: .bold))
+                    .foregroundStyle(Color.cyan)
+
+                Text("Playing:")
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundStyle(Color.primary.opacity(0.55))
+
+                Text(station.title)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Color.primary.opacity(0.9))
+                    .lineLimit(1)
+
+                Button(action: onStop) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "stop.fill")
+                            .font(.system(size: 7, weight: .black))
+                        Text("Stop")
+                            .font(.system(size: 8.5, weight: .bold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2.5)
+                    .background(Capsule().fill(Color.red.opacity(0.85)))
+                }
+                .buttonStyle(.plain)
+                .help("Stop Focus Music")
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(fill))
+            .overlay(Capsule().strokeBorder(stroke, lineWidth: 1))
+            .compositingGroup()
+            .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
+
+            if showTail {
+                Triangle()
+                    .fill(fill)
+                    .frame(width: 10, height: 5)
+                    .offset(x: tailOffset)
+            }
+        }
+    }
+}
+
+// MARK: - Desktop Pet Tailored Quote Bubble
+
+struct PetQuoteBubble: View {
+    let quote: QuoteItem
+    @ObservedObject private var quoteCtrl = QuoteController.shared
+    @ObservedObject private var musicCtrl = FocusMusicController.shared
+    @ObservedObject private var settings = BubbleSettings.shared
+    @Environment(\.bubbleTailOffset) private var tailOffset
+
+    private var fill: Color {
+        switch settings.theme {
+        case .light:  return Color.white.opacity(settings.opacity)
+        case .dark:   return Color(nsColor: .windowBackgroundColor).opacity(settings.opacity)
+        case .system: return Color(nsColor: .textBackgroundColor).opacity(settings.opacity)
+        }
+    }
+
+    private var textColor: Color {
+        switch settings.theme {
+        case .light:  return .black.opacity(0.92)
+        case .dark:   return .white.opacity(0.95)
+        case .system: return Color.primary.opacity(0.95)
+        }
+    }
+
+    private var dimmedTextColor: Color {
+        switch settings.theme {
+        case .light:  return .black.opacity(0.65)
+        case .dark:   return .white.opacity(0.65)
+        case .system: return Color.primary.opacity(0.65)
+        }
+    }
+
+    private var borderColor: Color {
+        switch settings.theme {
+        case .light:  return .black.opacity(0.08)
+        case .dark:   return .white.opacity(0.15)
+        case .system: return Color.primary.opacity(0.1)
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 4) {
+                    HStack(spacing: 3) {
+                        Image(systemName: quote.category.icon)
+                            .font(.system(size: 8))
+                        Text(quote.category.displayName.uppercased())
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2.5)
+                    .background(Capsule().fill(Color.orange.opacity(0.25)))
+                    .foregroundStyle(Color.orange)
+
+                    Spacer(minLength: 4)
+
+                    if musicCtrl.isPlaying {
+                        Button {
+                            musicCtrl.stop()
+                        } label: {
+                            HStack(spacing: 2) {
+                                Image(systemName: "stop.fill")
+                                    .font(.system(size: 6.5, weight: .black))
+                                Text("Stop Music")
+                                    .font(.system(size: 7.5, weight: .bold))
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.red.opacity(0.85)))
+                        }
+                        .buttonStyle(.plain)
+                        .help("Stop Focus Music")
+                    } else {
+                        Button {
+                            musicCtrl.play()
+                        } label: {
+                            Image(systemName: "music.note")
+                                .font(.system(size: 9))
+                                .foregroundStyle(dimmedTextColor)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Play Focus Music")
+                    }
+
+                    Button {
+                        quoteCtrl.toggleFavorite(id: quote.id)
+                    } label: {
+                        Image(systemName: quote.isFavorite ? "star.fill" : "star")
+                            .font(.system(size: 9.5))
+                            .foregroundStyle(quote.isFavorite ? Color.yellow : dimmedTextColor)
+                    }
+                    .buttonStyle(.plain)
+                    .help(quote.isFavorite ? "Remove favorite" : "Favorite quote")
+
+                    Button {
+                        quoteCtrl.nextQuote()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 9))
+                            .foregroundStyle(dimmedTextColor)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Next quote")
+
+                    Button {
+                        quoteCtrl.dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(dimmedTextColor)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Close notification")
+                }
+
+                Text("“\(quote.text)”")
+                    .font(.system(size: max(11, settings.fontSize.primaryPt), weight: .medium, design: .serif))
+                    .foregroundStyle(textColor)
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
+
+                if !quote.authorOrMeaning.isEmpty || quote.category == .idioms {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(quote.category == .idioms ? "Meaning: \(quote.authorOrMeaning)" : "— \(quote.authorOrMeaning.isEmpty ? quote.category.displayName : quote.authorOrMeaning)")
+                            .font(.system(size: max(9.5, settings.fontSize.secondaryPt - 0.5), design: .serif))
+                            .foregroundStyle(dimmedTextColor)
+                            .lineSpacing(1.5)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .frame(width: 320)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(fill))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(borderColor, lineWidth: 1))
+            .compositingGroup()
+            .shadow(color: .black.opacity(0.18), radius: 5, y: 2)
+
+            Triangle()
+                .fill(fill)
+                .frame(width: 12, height: 7)
+                .offset(x: tailOffset)
+        }
+        .frame(width: 320)
+    }
+}
+
+// MARK: - Desktop Pet Due Reminder Bubble
+
+struct PetReminderBubble: View {
+    let due: DueReminder
+    @ObservedObject private var reminderCtrl = ReminderController.shared
+    @Environment(\.bubbleTailOffset) private var tailOffset
+
+    private var fill: Color {
+        Color(red: 0.10, green: 0.11, blue: 0.16).opacity(0.96)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 5) {
+                    Image(systemName: due.icon)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.orange)
+                    Text(due.title)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                    Spacer(minLength: 4)
+                    Text("DUE")
+                        .font(.system(size: 8, weight: .black))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(RoundedRectangle(cornerRadius: 3).fill(Color.orange.opacity(0.35)))
+                        .foregroundStyle(Color.orange)
+                }
+
+                Text(due.message)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .lineLimit(2)
+
+                HStack(spacing: 5) {
+                    Button {
+                        reminderCtrl.complete(ruleId: due.ruleId)
+                    } label: {
+                        HStack(spacing: 3) {
+                            if due.kind == .water {
+                                Text("💧 +1 Drank")
+                            } else {
+                                Image(systemName: "checkmark")
+                                Text("Done")
+                            }
+                        }
+                        .font(.system(size: 9, weight: .bold))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.green.opacity(0.85)))
+                        .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        reminderCtrl.snooze(ruleId: due.ruleId, minutes: 5)
+                    } label: {
+                        HStack(spacing: 2) {
+                            Image(systemName: "moon.zzz.fill").font(.system(size: 8))
+                            Text("5m")
+                        }
+                        .font(.system(size: 9, weight: .medium))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.white.opacity(0.18)))
+                        .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        reminderCtrl.dismiss(ruleId: due.ruleId)
+                    } label: {
+                        Text("✕")
+                            .font(.system(size: 8, weight: .bold))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(Color.white.opacity(0.12)))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.top, 2)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(fill))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.orange.opacity(0.5), lineWidth: 1))
+            .compositingGroup()
+            .shadow(color: .black.opacity(0.28), radius: 6, y: 3)
+
+            Triangle()
+                .fill(fill)
+                .frame(width: 12, height: 7)
+                .offset(x: tailOffset)
+        }
         .fixedSize(horizontal: true, vertical: true)
-        .frame(maxWidth: 420)
+        .frame(maxWidth: 320)
+    }
+}
+
+// MARK: - Desktop Pet Pomodoro Pill
+
+struct PetPomodoroBubble: View {
+    var body: some View {
+        AgentBubble(sessions: [], showPomodoro: true)
+    }
+}
+
+// MARK: - 24-Hour Day Progress Bar with Nighttime Demarcation
+
+struct DayProgressBarView: View {
+    let snapshot: DayProgressSnapshot
+    let config: DayProgressConfig
+    var barWidth: CGFloat = 260
+    var barHeight: CGFloat = 8
+
+    var body: some View {
+        let sleepFraction = max(0.0, min(1.0, Double(config.sleepHour) / 24.0))
+        let sleepX = barWidth * sleepFraction
+        let progressX = barWidth * max(0.0, min(1.0, snapshot.percentPassed))
+
+        VStack(spacing: 2) {
+            ZStack(alignment: .leading) {
+                // Base track
+                HStack(spacing: 0) {
+                    // Daytime track (0 to sleep)
+                    Rectangle()
+                        .fill(Color.white.opacity(0.12))
+                        .frame(width: max(0, sleepX), height: barHeight)
+
+                    // Nighttime track (sleep to 24)
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(red: 0.28, green: 0.24, blue: 0.55).opacity(0.45),
+                                         Color(red: 0.18, green: 0.15, blue: 0.40).opacity(0.55)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: max(0, barWidth - sleepX), height: barHeight)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: barHeight / 2))
+
+                // Progress Fill
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: snapshot.isPastSleepTime
+                                ? [Color.cyan, Color.blue, Color.purple, Color(red: 0.7, green: 0.4, blue: 1.0)]
+                                : [Color(red: 0.2, green: 0.8, blue: 1.0), Color.blue],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: max(2, progressX), height: barHeight)
+                    .clipShape(RoundedRectangle(cornerRadius: barHeight / 2))
+
+                // Nighttime Boundary Line
+                Rectangle()
+                    .fill(Color(red: 0.75, green: 0.65, blue: 1.0))
+                    .frame(width: 2, height: barHeight + 4)
+                    .offset(x: max(0, sleepX - 1))
+                    .shadow(color: Color(red: 0.7, green: 0.5, blue: 1.0).opacity(0.8), radius: 3)
+
+                // Current Progress Head Knob
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: barHeight + 2, height: barHeight + 2)
+                    .offset(x: max(0, min(barWidth - (barHeight + 2), progressX - (barHeight / 2))))
+                    .shadow(color: .black.opacity(0.4), radius: 2)
+            }
+            .frame(width: barWidth, height: barHeight + 4)
+        }
+    }
+}
+
+// MARK: - Desktop Pet Day Progress & Hourly Chime Bubble
+
+struct PetDayProgressBubble: View {
+    let snapshot: DayProgressSnapshot
+    var showTail: Bool = true
+    @ObservedObject private var dayProgressCtrl = DayProgressController.shared
+    @ObservedObject private var settings = BubbleSettings.shared
+    @Environment(\.bubbleTailOffset) private var tailOffset
+
+    private var fill: Color {
+        Color(red: 0.10, green: 0.11, blue: 0.16).opacity(0.96)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                // Header Row
+                HStack(spacing: 5) {
+                    Image(systemName: snapshot.currentSection.icon)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color(hex: snapshot.currentSection.colorHex))
+
+                    Text(snapshot.currentTimeFormatted)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+
+                    Text(snapshot.currentSection.title.uppercased())
+                        .font(.system(size: 7.5, weight: .heavy))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1.5)
+                        .background(Capsule().fill(Color(hex: snapshot.currentSection.colorHex).opacity(0.25)))
+                        .foregroundStyle(Color(hex: snapshot.currentSection.colorHex))
+
+                    Spacer(minLength: 4)
+
+                    Text("\(Int(snapshot.percentPassed * 100))% DAY")
+                        .font(.system(size: 8, weight: .heavy))
+                        .foregroundStyle(.white.opacity(0.55))
+
+                    Button {
+                        dayProgressCtrl.dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.55))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Dismiss")
+                }
+
+                // Subline: time passed today & remaining
+                HStack(spacing: 4) {
+                    Text("\(snapshot.hoursPassedFormatted) passed")
+                        .font(.system(size: 9.5, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.85))
+                    Text("·")
+                        .font(.system(size: 9.5))
+                        .foregroundStyle(.white.opacity(0.4))
+                    Text("\(snapshot.remainingFormatted) left")
+                        .font(.system(size: 9.5, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.65))
+
+                    Spacer()
+
+                    if snapshot.isPastSleepTime {
+                        HStack(spacing: 2) {
+                            Text("🌙 Nighttime")
+                                .font(.system(size: 8.5, weight: .bold))
+                                .foregroundStyle(Color(red: 0.65, green: 0.55, blue: 1.0))
+                        }
+                    } else {
+                        Text("\(snapshot.untilSleepFormatted)")
+                            .font(.system(size: 8.5, weight: .medium))
+                            .foregroundStyle(Color.cyan.opacity(0.85))
+                    }
+                }
+
+                // The 24-Hour Day Progress Bar with Nighttime Section demarcation
+                DayProgressBarView(snapshot: snapshot, config: dayProgressCtrl.config, barWidth: 260)
+
+                // Marker Legend below bar
+                HStack {
+                    Text("0h")
+                        .font(.system(size: 7.5))
+                        .foregroundStyle(.white.opacity(0.3))
+                    Spacer()
+                    HStack(spacing: 2) {
+                        Image(systemName: "sun.max.fill").font(.system(size: 7))
+                        Text(snapshot.wakeTimeFormatted)
+                    }
+                    .font(.system(size: 7.5))
+                    .foregroundStyle(.white.opacity(0.45))
+                    Spacer()
+                    HStack(spacing: 2) {
+                        Image(systemName: "moon.fill").font(.system(size: 7))
+                        Text(snapshot.sleepTimeFormatted)
+                    }
+                    .font(.system(size: 7.5, weight: .bold))
+                    .foregroundStyle(Color(red: 0.7, green: 0.6, blue: 1.0))
+                    Spacer()
+                    Text("24h")
+                        .font(.system(size: 7.5))
+                        .foregroundStyle(.white.opacity(0.3))
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(fill))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(snapshot.isPastSleepTime ? Color(red: 0.5, green: 0.4, blue: 0.9).opacity(0.5) : Color.white.opacity(0.12), lineWidth: 1)
+            )
+            .compositingGroup()
+            .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
+
+            if showTail {
+                Triangle()
+                    .fill(fill)
+                    .frame(width: 12, height: 7)
+                    .offset(x: tailOffset)
+            }
+        }
+        .frame(width: 285)
     }
 }
 

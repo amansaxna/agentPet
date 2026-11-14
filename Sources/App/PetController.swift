@@ -151,7 +151,19 @@ final class PetController: ObservableObject {
     /// Called by the daemon whenever the session list changes.
     func update(sessions: [AgentSession]) {
         latestSessions = sessions
-        let resolved = MoodResolver.aggregate(sessions)
+        var resolved = MoodResolver.aggregate(sessions)
+
+        // Overlay mood from due reminders and active Pomodoro phases when no coding agents are working
+        if resolved == .idle {
+            if !ReminderController.shared.dueReminders.isEmpty {
+                resolved = .waiting
+            } else if PomodoroController.shared.state.phase == .focus {
+                resolved = .working
+            } else if PomodoroController.shared.state.phase == .shortBreak || PomodoroController.shared.state.phase == .longBreak {
+                resolved = .sleepy
+            }
+        }
+
         defer { lastResolved = resolved }
 
         if resolved == .done && lastResolved != .done {
@@ -301,6 +313,10 @@ final class PetController: ObservableObject {
     /// The idle "doing nothing" chatter, care-coloured (hunger / budget anxiety).
     /// Shared by the aggregate `refreshChat` and per-project home windows.
     private func idleLine(petID: String? = nil) -> String {
+        if QuoteController.shared.config.showInPetBubble {
+            let quote = QuoteController.shared.currentQuote
+            return "“\(quote.text)” — \(quote.category.displayName)"
+        }
         let pool = BubbleSettings.shared.multiAgentBubbleEnabled
             ? BubbleMessages.shared.lines(for: nil, mood: .idle)
             : ChatSettings.shared.lines(for: .idle)

@@ -1,6 +1,7 @@
 // The tray/right-click popover , a port of the macOS MenuContentView: live
 // agent list with dismiss + Clear all, Show pet toggle, pet-size slider, and
-// a Settings / Updates / Quit footer. Hides itself when it loses focus.
+// a Settings / Updates / Quit footer, plus 5 personal productivity modules:
+// Primary Goal, Due Reminders, Pomodoro & Work Tracker, and Tailored Quotes.
 
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
@@ -13,6 +14,11 @@ import { projectLabel } from "./projectnames";
 import { elapsedString } from "./bubble";
 import { t } from "./i18n";
 import * as limits from "./limits";
+import * as goals from "./goals";
+import * as pomodoro from "./pomodoro";
+import * as reminders from "./reminders";
+import * as worktracker from "./worktracker";
+import * as quotes from "./quotes";
 
 const store = new SessionStore();
 const list = document.getElementById("pop-list")!;
@@ -21,7 +27,7 @@ const sub = document.getElementById("pop-sub")!;
 const clearBtn = document.getElementById("pop-clear") as HTMLButtonElement;
 
 function esc(s: string): string {
-  return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] || c));
+  return String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] || c));
 }
 
 function applyStatic() {
@@ -42,7 +48,212 @@ function visible(): Session[] {
   return store.active().filter((s) => s.state !== "idle" && s.state !== "registered");
 }
 
+function paintPrimaryGoal() {
+  const host = document.getElementById("pop-primary-goal");
+  if (!host) return;
+  const primary = goals.getPrimaryGoal();
+  if (!primary) {
+    host.style.display = "none";
+    return;
+  }
+  host.style.display = "block";
+  const m = goals.computeGoalMetrics(primary);
+  const analysis = worktracker.computeWorkAnalysis("today");
+  const workedStr = worktracker.formatDuration(analysis.totalWorkSeconds);
+  const targetStr = `${(primary.dailyTargetMinutes / 60).toFixed(0)}h`;
+  const pct = Math.round(m.timelineProgress * 100);
+
+  host.innerHTML = `
+    <div class="pop-goal-card">
+      <div class="pop-goal-header">
+        <span class="pop-goal-tag">${esc(primary.category.toUpperCase())}</span>
+        <span class="pop-goal-status">${esc(m.statusLabel)}</span>
+      </div>
+      <div class="pop-goal-title">${esc(primary.title)}</div>
+      <div class="pop-goal-sub">${esc(m.passedLabel)}</div>
+      <div class="pop-goal-bar-wrap">
+        <div class="pop-goal-bar" style="width: ${pct}%"></div>
+      </div>
+      <div class="pop-goal-footer">
+        <span class="pop-goal-time">Today: <b>${workedStr}</b> / ${targetStr}</span>
+        <button class="pop-goal-focus-btn" id="pop-focus-goal">▶ Focus</button>
+      </div>
+    </div>
+  `;
+
+  const btn = document.getElementById("pop-focus-goal");
+  if (btn) {
+    btn.onclick = () => {
+      pomodoro.startFocus(primary.title);
+      paintAndFit();
+    };
+  }
+}
+
+function paintReminderBanner() {
+  const host = document.getElementById("pop-reminder-banner");
+  if (!host) return;
+  const dues = reminders.checkDueReminders();
+  if (!dues.length) {
+    host.style.display = "none";
+    return;
+  }
+  host.style.display = "block";
+  const due = dues[0];
+  const icon = due.kind === "water" ? "💧" : (due.kind === "takeTime" ? "🧘" : "⏰");
+
+  host.innerHTML = `
+    <div class="pop-rem-banner">
+      <div class="pop-rem-head">
+        <span class="pop-rem-ic">${icon}</span>
+        <div class="pop-rem-meta">
+          <b>${esc(due.rule.title)}</b>
+          <div class="cap">${esc(due.rule.message)}</div>
+        </div>
+      </div>
+      <div class="pop-rem-actions">
+        <button class="pop-btn-pill" id="pop-rem-snooze5">Snooze 5m</button>
+        <button class="pop-btn-pill" id="pop-rem-snooze15">Snooze 15m</button>
+        <button class="pop-btn-pill highlight" id="pop-rem-done">Done</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("pop-rem-snooze5")?.addEventListener("click", () => {
+    reminders.snoozeReminder(due.rule.id, 5);
+    paintAndFit();
+  });
+  document.getElementById("pop-rem-snooze15")?.addEventListener("click", () => {
+    reminders.snoozeReminder(due.rule.id, 15);
+    paintAndFit();
+  });
+  document.getElementById("pop-rem-done")?.addEventListener("click", () => {
+    reminders.completeReminder(due.rule.id);
+    paintAndFit();
+  });
+}
+
+function paintPomodoroBar() {
+  const host = document.getElementById("pop-pomodoro-bar");
+  if (!host) return;
+
+  const state = pomodoro.loadState();
+  const timeStr = pomodoro.formatTime(state.remainingSeconds);
+  const phaseLabels: Record<pomodoro.PomodoroPhase, string> = {
+    focus: "Focus",
+    shortBreak: "Short Break",
+    longBreak: "Long Break",
+    idle: "Idle",
+  };
+  const phaseLabel = phaseLabels[state.phase] || "Pomodoro";
+  const manual = worktracker.getActiveManualSession();
+  const todayAnalysis = worktracker.computeWorkAnalysis("today");
+  const todayWorked = worktracker.formatDuration(todayAnalysis.totalWorkSeconds);
+  const waterCups = reminders.getWaterCupsToday();
+
+  const isRunning = state.isRunning;
+  const playPauseIcon = isRunning ? "⏸" : "▶";
+
+  host.innerHTML = `
+    <div class="pop-pomo-wrap">
+      <div class="pop-pomo-main">
+        <div class="pop-pomo-time-block">
+          <span class="pop-pomo-time">${timeStr}</span>
+          <span class="pop-pomo-phase-badge ${state.phase}">${phaseLabel}</span>
+        </div>
+        <div class="pop-pomo-controls">
+          <button class="pop-ic-btn" id="pop-pomo-toggle" title="${isRunning ? 'Pause' : 'Start'}">${playPauseIcon}</button>
+          <button class="pop-ic-btn" id="pop-pomo-skip" title="Skip Phase">⏭</button>
+          <button class="pop-ic-btn" id="pop-pomo-reset" title="Reset">↺</button>
+        </div>
+      </div>
+      <div class="pop-pomo-subrow">
+        <span class="pop-pomo-tag" title="Active Subject">🏷 ${esc(state.subjectTag || "General")}</span>
+        <span class="spacer"></span>
+        <span class="pop-pomo-worked">Worked: <b>${todayWorked}</b></span>
+      </div>
+      <div class="pop-pomo-tools">
+        <button class="pop-chip-btn ${manual ? 'active' : ''}" id="pop-clock-btn">
+          ${manual ? '⏹ Clock Out' : '⏱ Clock In'}
+        </button>
+        <button class="pop-chip-btn" id="pop-water-btn" title="Add 1 water glass">
+          💧 ${waterCups} cups <span class="pop-plus">+1</span>
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("pop-pomo-toggle")?.addEventListener("click", () => {
+    if (state.isRunning) {
+      pomodoro.pause();
+    } else {
+      if (state.phase === "idle") pomodoro.startFocus();
+      else pomodoro.resume();
+    }
+    paintAndFit();
+  });
+  document.getElementById("pop-pomo-skip")?.addEventListener("click", () => {
+    pomodoro.skipPhase();
+    paintAndFit();
+  });
+  document.getElementById("pop-pomo-reset")?.addEventListener("click", () => {
+    pomodoro.reset();
+    paintAndFit();
+  });
+  document.getElementById("pop-clock-btn")?.addEventListener("click", () => {
+    if (manual) {
+      worktracker.stopManualWork();
+    } else {
+      const primary = goals.getPrimaryGoal();
+      worktracker.startManualWork(primary ? primary.title : "Deep Work");
+    }
+    paintAndFit();
+  });
+  document.getElementById("pop-water-btn")?.addEventListener("click", () => {
+    reminders.incrementWaterCup();
+    paintAndFit();
+  });
+}
+
+function paintQuoteCard() {
+  const host = document.getElementById("pop-quote-card");
+  if (!host) return;
+
+  const quote = quotes.getCurrentQuote();
+  const catLabel = quotes.CATEGORY_LABELS[quote.category] || quote.category;
+  const catColor = quotes.CATEGORY_COLORS[quote.category] || "#3b82f6";
+  const isFav = !!quote.isFavorite;
+
+  host.innerHTML = `
+    <div class="pop-quote-wrap">
+      <div class="pop-quote-top">
+        <span class="pop-quote-cat" style="background: ${catColor}22; color: ${catColor}; border: 1px solid ${catColor}44;">
+          ${esc(catLabel)}
+        </span>
+        <span class="spacer"></span>
+        <button class="pop-quote-btn ${isFav ? 'fav' : ''}" id="pop-quote-star" title="Star Favorite">${isFav ? '★' : '☆'}</button>
+        <button class="pop-quote-btn" id="pop-quote-next" title="Next Quote">↻</button>
+      </div>
+      <div class="pop-quote-text">“${esc(quote.text)}”</div>
+      ${quote.authorOrMeaning ? `<div class="pop-quote-meta">— ${esc(quote.authorOrMeaning)}</div>` : ''}
+    </div>
+  `;
+
+  document.getElementById("pop-quote-star")?.addEventListener("click", () => {
+    quotes.toggleQuoteFavorite(quote.id);
+    paintAndFit();
+  });
+  document.getElementById("pop-quote-next")?.addEventListener("click", () => {
+    quotes.getNextQuote();
+    paintAndFit();
+  });
+}
+
 function paint() {
+  paintPrimaryGoal();
+  paintReminderBanner();
+  paintPomodoroBar();
+
   const sessions = visible();
   const running = sessions.filter((s) => s.state === "working").length;
   if (!sessions.length) {
@@ -79,6 +290,7 @@ function paint() {
     list.appendChild(row);
   }
   paintLimits();
+  paintQuoteCard();
 }
 
 /// Subscription limits from the pet window's cache (no extra API call), only
@@ -124,9 +336,13 @@ size.oninput = () => {
   emit("bubble-changed", null);
 };
 
+function safeCurrentWindow() {
+  try { return getCurrentWindow(); } catch { return null; }
+}
+
 (document.getElementById("pop-settings") as HTMLButtonElement).onclick = () => {
   invoke("open_settings").catch(() => {});
-  void getCurrentWindow().hide();
+  void safeCurrentWindow()?.hide();
 };
 (document.getElementById("pop-quit") as HTMLButtonElement).onclick = () => { exit(0); };
 
@@ -152,47 +368,61 @@ updatesBtn.onclick = async () => {
 
 // ---- lifecycle ----------------------------------------------------------------
 
-// Hide when clicking anywhere outside (the popover loses focus), like the
-// macOS transient popover. Backed up by a Rust-side Focused(false) handler,
-// a "popover-close" broadcast from the pet window, and the Escape key.
-getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-  if (!focused) void getCurrentWindow().hide();
-});
-listen("popover-close", () => void getCurrentWindow().hide());
+try {
+  safeCurrentWindow()?.onFocusChanged(({ payload: focused }) => {
+    if (!focused) void safeCurrentWindow()?.hide();
+  });
+} catch {}
+try { listen("popover-close", () => void safeCurrentWindow()?.hide()).catch?.(() => {}); } catch {}
 window.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") void getCurrentWindow().hide();
+  if (e.key === "Escape") void safeCurrentWindow()?.hide();
 });
 
-listen<AgentEventPayload>("agent-event", (e) => { store.update(e.payload); paintAndFit(); });
-listen<string>("agent-end", (e) => { store.remove(e.payload); paintAndFit(); });
-listen<{ agent: string; session: string; title: string }>("agent-title", (e) => {
+try { listen<AgentEventPayload>("agent-event", (e) => { store.update(e.payload); paintAndFit(); }).catch?.(() => {}); } catch {}
+try { listen<string>("agent-end", (e) => { store.remove(e.payload); paintAndFit(); }).catch?.(() => {}); } catch {}
+try { listen<{ agent: string; session: string; title: string }>("agent-title", (e) => {
   store.setTitle(e.payload.agent, e.payload.session, e.payload.title);
   paintAndFit();
-});
-listen<Session>("session-snapshot", (e) => { store.seed(e.payload); paintAndFit(); });
-// Re-sync + refresh whenever the popover is shown again.
-listen("popover-shown", () => {
+}).catch?.(() => {}); } catch {}
+try { listen<Session>("session-snapshot", (e) => { store.seed(e.payload); paintAndFit(); }).catch?.(() => {}); } catch {}
+try { listen("popover-shown", () => {
   size.value = localStorage.getItem("ap_pet_size") || "100";
   invoke<boolean>("get_pet_visible").then((v) => { showPet.checked = v; }).catch(() => {});
-  emit("sessions-request", null);
+  try { emit("sessions-request", null).catch?.(() => {}); } catch {}
   paintAndFit();
-});
-emit("sessions-request", null);
+}).catch?.(() => {}); } catch {}
+try { emit("sessions-request", null).catch?.(() => {}); } catch {}
 
-// Hug the content height like the macOS popover (no dead space).
+// Synchronize external changes
+window.addEventListener("goals-changed", () => paintAndFit());
+window.addEventListener("quotes-changed", () => paintAndFit());
+window.addEventListener("worktracker-changed", () => paintAndFit());
+window.addEventListener("pomodoro-changed", () => paintAndFit());
+window.addEventListener("reminders-changed", () => paintAndFit());
+
 let lastH = 0;
 function fitWindow() {
   const card = document.querySelector(".pop-card") as HTMLElement;
   if (!card) return;
-  const h = Math.min(560, Math.max(220, card.scrollHeight + 20));
+  const h = Math.min(680, Math.max(220, card.scrollHeight + 20));
   if (Math.abs(h - lastH) < 2) return;
   lastH = h;
-  getCurrentWindow().setSize(new LogicalSize(300, h)).catch(() => {});
+  try { safeCurrentWindow()?.setSize(new LogicalSize(320, h)).catch?.(() => {}); } catch {}
 }
 
-const origPaint = paint;
-function paintAndFit() { origPaint(); fitWindow(); }
+function tickAndPaint() {
+  pomodoro.tickPomodoro();
+  quotes.checkQuoteRotation();
+  worktracker.syncFromAgentHistory();
+  paint();
+  fitWindow();
+}
 
-setInterval(paintAndFit, 1000); // live elapsed + prune
+function paintAndFit() {
+  paint();
+  fitWindow();
+}
+
+setInterval(tickAndPaint, 1000);
 applyStatic();
 paintAndFit();

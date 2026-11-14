@@ -54,6 +54,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NativeUsageProbe.shared.start()
         CareSyncController.shared.start()
         BreakReminderController.shared.start()
+        _ = NotificationManager.shared
+        _ = TargetGoalController.shared
+        _ = PomodoroController.shared
+        _ = ReminderController.shared
+        _ = WorkTrackerController.shared
+        _ = QuoteController.shared
+        _ = FocusClockController.shared
+        _ = FocusMusicController.shared
+        _ = DayProgressController.shared
         SettingsModel.shared.migrateInstalledHooksIfNeeded()
         SettingsModel.shared.repairStaleHookPathsIfNeeded()
         updater = UpdaterController.shared

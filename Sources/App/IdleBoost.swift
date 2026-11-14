@@ -1,4 +1,6 @@
+// Sources/App/IdleBoost.swift
 import Foundation
+import AgentPetCore
 
 enum IdleBoost {
     static let lines = [
@@ -16,7 +18,16 @@ enum IdleBoost {
         "One clean diff can fix the whole afternoon.",
     ]
 
+    @MainActor
     static func line(at date: Date = Date()) -> String {
+        let quoteCtrl = QuoteController.shared
+        if quoteCtrl.config.showInPetBubble {
+            let q = quoteCtrl.currentQuote
+            if q.category == .idioms {
+                return "\(q.text) — \(q.authorOrMeaning)"
+            }
+            return "\"\(q.text)\""
+        }
         let minute = max(0, Int(date.timeIntervalSince1970 / 60))
         return NSLocalizedString(lines[minute % lines.count], comment: "idle message")
     }

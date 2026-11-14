@@ -338,6 +338,230 @@ export class BubbleRenderer {
     }
   }
 
+  renderReminder(
+    due: { kind: string; rule: { title: string; message: string; id: string } },
+    onDone: () => void,
+    onSnooze: (mins: number) => void,
+    onDismiss: () => void
+  ) {
+    this.clear();
+    const card = document.createElement("div");
+    card.className = "pet-reminder-card";
+
+    const header = document.createElement("div");
+    header.className = "pet-rem-header";
+    header.innerHTML = `<span>${due.kind === "water" ? "💧" : "🔔"} <b>${due.rule.title}</b></span><span class="due-badge">DUE</span>`;
+
+    const msg = document.createElement("div");
+    msg.className = "pet-rem-msg";
+    msg.textContent = due.rule.message;
+
+    const btns = document.createElement("div");
+    btns.className = "pet-rem-btns";
+
+    const doneBtn = document.createElement("button");
+    doneBtn.className = "pet-rem-btn-done";
+    doneBtn.textContent = due.kind === "water" ? "💧 +1" : "✓ Done";
+    doneBtn.onclick = (e) => { e.stopPropagation(); onDone(); };
+
+    const snoozeBtn = document.createElement("button");
+    snoozeBtn.className = "pet-rem-btn-snooze";
+    snoozeBtn.textContent = "💤 5m";
+    snoozeBtn.onclick = (e) => { e.stopPropagation(); onSnooze(5); };
+
+    const dismissBtn = document.createElement("button");
+    dismissBtn.className = "pet-rem-btn-dismiss";
+    dismissBtn.textContent = "✕";
+    dismissBtn.onclick = (e) => { e.stopPropagation(); onDismiss(); };
+
+    btns.appendChild(doneBtn);
+    btns.appendChild(snoozeBtn);
+    btns.appendChild(dismissBtn);
+
+    card.appendChild(header);
+    card.appendChild(msg);
+    card.appendChild(btns);
+
+    this.root.appendChild(card);
+    this.root.classList.remove("capsule");
+    this.root.hidden = false;
+  }
+
+  renderPomodoro(
+    pomo: { phase: string; remainingSeconds: number; isRunning: boolean; subject?: string },
+    onToggle: () => void,
+    onStop?: () => void,
+    onMusicToggle?: () => void,
+    isMusicPlaying?: boolean
+  ) {
+    this.clear();
+    const pill = document.createElement("div");
+    pill.className = "pet-pomodoro-pill";
+
+    const m = Math.floor(pomo.remainingSeconds / 60);
+    const s = pomo.remainingSeconds % 60;
+    const formatted = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+
+    const phaseLabel = !pomo.isRunning ? "Paused" : (pomo.phase === "focus" ? "Focus" : "Break");
+    const dotColor = !pomo.isRunning ? "#f59e0b" : (pomo.phase === "focus" ? "#3b82f6" : "#22c55e");
+    const icon = pomo.phase === "focus" ? "⏱" : "☕";
+
+    pill.innerHTML = `
+      <div class="pomo-dot" style="background:${dotColor}"></div>
+      <span class="pomo-icon">${icon}</span>
+      <span class="pomo-phase">${phaseLabel}</span>
+      <span class="pomo-time">${formatted}</span>
+      <div class="pomo-btns">
+        ${onMusicToggle ? `<button class="pomo-music" title="${isMusicPlaying ? "Stop Focus Music" : "Play Focus Music"}">${isMusicPlaying ? "🔊" : "🎵"}</button>` : ""}
+        <button class="pomo-toggle" title="${pomo.isRunning ? "Pause" : "Resume"}">${pomo.isRunning ? "⏸" : "▶"}</button>
+        <button class="pomo-stop" title="Stop">⏹</button>
+      </div>
+    `;
+
+    if (onMusicToggle) {
+      pill.querySelector(".pomo-music")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onMusicToggle();
+      });
+    }
+
+    pill.querySelector(".pomo-toggle")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      onToggle();
+    });
+
+    if (onStop) {
+      pill.querySelector(".pomo-stop")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onStop();
+      });
+    }
+
+    this.root.appendChild(pill);
+    this.root.classList.add("capsule");
+    this.root.hidden = false;
+  }
+
+  renderMusicBubble(
+    station: { title: string; icon: string },
+    onStop: () => void
+  ) {
+    this.clear();
+    const pill = document.createElement("div");
+    pill.className = "music-capsule-row";
+    pill.innerHTML = `
+      <span class="m-icon">${station.icon || "🎻"}</span>
+      <span class="m-prefix">Playing:</span>
+      <span class="m-title">${station.title}</span>
+      <button class="m-stop-btn" title="Stop Focus Music">⏹ Stop</button>
+    `;
+    pill.querySelector(".m-stop-btn")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      onStop();
+    });
+    this.root.appendChild(pill);
+    this.root.classList.add("capsule");
+    this.root.hidden = false;
+  }
+
+  renderQuote(
+    quote: { text: string; category: string; authorOrMeaning?: string; isFavorite?: boolean },
+    onNext: () => void,
+    onFav: () => void,
+    onClose?: () => void,
+    onMusicToggle?: () => void,
+    isMusicPlaying?: boolean
+  ) {
+    this.clear();
+    const card = document.createElement("div");
+    card.className = "pet-quote-bubble";
+    card.innerHTML = `
+      <div class="pet-quote-head">
+        <span class="quote-tag">${quote.category.toUpperCase()}</span>
+        <div class="pet-quote-actions">
+          ${onMusicToggle ? `<button class="quote-btn music ${isMusicPlaying ? "playing" : ""}" title="${isMusicPlaying ? "Stop Focus Music" : "Play Focus Music"}">${isMusicPlaying ? "⏹ Stop Music" : "🎵"}</button>` : ""}
+          <button class="quote-btn fav" title="Favorite">${quote.isFavorite ? "★" : "☆"}</button>
+          <button class="quote-btn next" title="Next Quote">↻</button>
+          <button class="quote-btn close" title="Close">✕</button>
+        </div>
+      </div>
+      <div class="quote-text">“${quote.text}”</div>
+      ${quote.authorOrMeaning ? `<div class="quote-author">— ${quote.authorOrMeaning}</div>` : ""}
+    `;
+
+    if (onMusicToggle) {
+      card.querySelector(".quote-btn.music")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onMusicToggle();
+      });
+    }
+
+    card.querySelector(".quote-btn.fav")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      onFav();
+    });
+    card.querySelector(".quote-btn.next")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      onNext();
+    });
+    if (onClose) {
+      card.querySelector(".quote-btn.close")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onClose();
+      });
+    }
+
+    this.root.appendChild(card);
+    this.root.classList.remove("capsule");
+    this.root.hidden = false;
+  }
+
+  renderDayProgress(
+    snap: { currentTimeFormatted: string; percentPassed: number; hoursPassedToday: number; remainingHoursInDay: number; isPastSleepTime: boolean; sleepTimeFormatted: string; wakeTimeFormatted: string; currentSection: { title: string; icon: string } },
+    onClose: () => void
+  ) {
+    this.clear();
+    const card = document.createElement("div");
+    card.className = "pet-dayprog-bubble";
+    const progPercent = (snap.percentPassed * 100).toFixed(0);
+    const sleepPercent = ((23 / 24) * 100).toFixed(1);
+
+    card.innerHTML = `
+      <div class="pet-quote-head">
+        <span class="quote-tag" style="background:rgba(99,102,241,0.25);color:#818cf8">${snap.currentSection.icon} ${snap.currentSection.title.toUpperCase()}</span>
+        <div class="pet-quote-actions">
+          <span style="font-size:8px;font-weight:700;color:rgba(255,255,255,0.6)">${progPercent}% DAY</span>
+          <button class="quote-btn close" title="Close">✕</button>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:2px 0;font-size:10px">
+        <b style="color:#fff">${snap.currentTimeFormatted}</b>
+        <span style="color:rgba(255,255,255,0.7)">${Math.floor(snap.hoursPassedToday)}h passed · ${Math.floor(snap.remainingHoursInDay)}h left</span>
+      </div>
+      <div class="sc-dayprog-bar-wrap" style="margin:4px 0">
+        <div class="sc-dayprog-bar-track">
+          <div class="sc-dayprog-bar-night-zone" style="left:${sleepPercent}%"></div>
+          <div class="sc-dayprog-bar-fill ${snap.isPastSleepTime ? 'night-fill' : ''}" style="width:${progPercent}%;background:#38bdf8"></div>
+          <div class="sc-dayprog-bar-line" style="left:${sleepPercent}%"></div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:8px;color:rgba(255,255,255,0.45)">
+        <span>0h</span>
+        <span>${snap.isPastSleepTime ? '🌙 Nighttime' : '🌙 Bedtime ' + snap.sleepTimeFormatted}</span>
+        <span>24h</span>
+      </div>
+    `;
+
+    card.querySelector(".quote-btn.close")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      onClose();
+    });
+
+    this.root.appendChild(card);
+    this.root.classList.remove("capsule");
+    this.root.hidden = false;
+  }
+
   hide() {
     this.clear();
     this.root.hidden = true;
