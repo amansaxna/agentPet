@@ -26,6 +26,7 @@ public final class VoiceController: NSObject, ObservableObject, AVSpeechSynthesi
 
     @Published public private(set) var isSpeaking: Bool = false
     @Published public private(set) var isFetchingFrontier: Bool = false
+    @Published public private(set) var testingVoiceId: String? = nil
     @Published public private(set) var lastErrorMessage: String? = nil
     @Published public var config: VoiceConfig {
         didSet {
@@ -227,12 +228,13 @@ public final class VoiceController: NSObject, ObservableObject, AVSpeechSynthesi
         }
     }
 
-    private func speakWithSystemSynthesizer(text: String) {
+    private func speakWithSystemSynthesizer(text: String, voiceId: String? = nil) {
         guard !text.isEmpty else { return }
         let utterance = AVSpeechUtterance(string: text)
 
-        if !config.selectedVoiceIdentifier.isEmpty,
-           let voice = AVSpeechSynthesisVoice(identifier: config.selectedVoiceIdentifier) {
+        let targetId = voiceId ?? config.selectedVoiceIdentifier
+        if !targetId.isEmpty,
+           let voice = AVSpeechSynthesisVoice(identifier: targetId) {
             utterance.voice = voice
         } else if let best = AVSpeechSynthesisVoice.speechVoices().first(where: { $0.quality == .enhanced || $0.identifier.contains("siri") }) {
             utterance.voice = best
@@ -258,10 +260,53 @@ public final class VoiceController: NSObject, ObservableObject, AVSpeechSynthesi
         audioPlayer = nil
         isSpeaking = false
         isFetchingFrontier = false
+        testingVoiceId = nil
     }
 
     public func testSpeech(item: VoiceSpeechItem) {
         speak(item.testPhrase, for: item, force: true)
+    }
+
+    /// Auditions any specific voice option without permanently changing settings.
+    public func testSpecificVoice(provider: VoiceProvider, voiceId: String, name: String) {
+        stop()
+        lastErrorMessage = nil
+        testingVoiceId = voiceId
+
+        let previewPhrase = "Hello! I am \(name). Listening to \(provider.shortName) voice synthesis."
+
+        if provider.isFrontier {
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                self.isFetchingFrontier = true
+                do {
+                    var testConfig = self.config
+                    testConfig.provider = provider
+                    switch provider {
+                    case .gemini:
+                        testConfig.geminiVoice = voiceId
+                    case .kokoro:
+                        testConfig.kokoroVoice = voiceId
+                    case .openai:
+                        testConfig.openaiVoice = voiceId
+                    case .elevenlabs:
+                        testConfig.elevenlabsVoiceId = voiceId
+                    case .system:
+                        testConfig.selectedVoiceIdentifier = voiceId
+                    }
+
+                    let audioData = try await FrontierVoiceService.shared.fetchAudio(text: previewPhrase, config: testConfig)
+                    self.isFetchingFrontier = false
+                    self.playAudioData(audioData)
+                } catch {
+                    self.isFetchingFrontier = false
+                    self.testingVoiceId = nil
+                    self.lastErrorMessage = error.localizedDescription
+                }
+            }
+        } else {
+            speakWithSystemSynthesizer(text: previewPhrase, voiceId: voiceId)
+        }
     }
 
     // MARK: - Specialized Verbal Communicator Intakes
@@ -332,17 +377,24 @@ public final class VoiceController: NSObject, ObservableObject, AVSpeechSynthesi
     // MARK: - Delegates
 
     public nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        Task { @MainActor in self.isSpeaking = false }
+        Task { @MainActor in
+            self.isSpeaking = false
+            self.testingVoiceId = nil
+        }
     }
 
     public nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        Task { @MainActor in self.isSpeaking = false }
+        Task { @MainActor in
+            self.isSpeaking = false
+            self.testingVoiceId = nil
+        }
     }
 
     public nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         Task { @MainActor in
             self.isSpeaking = false
             self.audioPlayer = nil
+            self.testingVoiceId = nil
         }
     }
 

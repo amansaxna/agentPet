@@ -122,7 +122,7 @@ struct VoiceTabView: View {
                 EyebrowLabel("GOOGLE GEMINI NEURAL VOICE PRESETS")
                 VStack(spacing: 6) {
                     ForEach(VoiceController.geminiVoices, id: \.id) { v in
-                        frontierVoiceRow(id: v.id, name: v.name, desc: v.desc, isSelected: voice.config.geminiVoice == v.id) {
+                        frontierVoiceRow(provider: .gemini, id: v.id, name: v.name, desc: v.desc, isSelected: voice.config.geminiVoice == v.id) {
                             voice.config.geminiVoice = v.id
                         }
                     }
@@ -132,7 +132,7 @@ struct VoiceTabView: View {
                 EyebrowLabel("KOKORO-82M LOCAL NEURAL VOICE PRESETS")
                 VStack(spacing: 6) {
                     ForEach(VoiceController.kokoroVoices, id: \.id) { v in
-                        frontierVoiceRow(id: v.id, name: v.name, desc: v.desc, isSelected: voice.config.kokoroVoice == v.id) {
+                        frontierVoiceRow(provider: .kokoro, id: v.id, name: v.name, desc: v.desc, isSelected: voice.config.kokoroVoice == v.id) {
                             voice.config.kokoroVoice = v.id
                         }
                     }
@@ -142,7 +142,7 @@ struct VoiceTabView: View {
                 EyebrowLabel("OPENAI CHATGPT NEURAL VOICE PRESETS")
                 VStack(spacing: 6) {
                     ForEach(VoiceController.openaiVoices, id: \.id) { v in
-                        frontierVoiceRow(id: v.id, name: v.name, desc: v.desc, isSelected: voice.config.openaiVoice == v.id) {
+                        frontierVoiceRow(provider: .openai, id: v.id, name: v.name, desc: v.desc, isSelected: voice.config.openaiVoice == v.id) {
                             voice.config.openaiVoice = v.id
                         }
                     }
@@ -152,7 +152,7 @@ struct VoiceTabView: View {
                 EyebrowLabel("ELEVENLABS STUDIO VOICE PRESETS")
                 VStack(spacing: 6) {
                     ForEach(VoiceController.elevenlabsVoices, id: \.id) { v in
-                        frontierVoiceRow(id: v.id, name: v.name, desc: v.desc, isSelected: voice.config.elevenlabsVoiceId == v.id) {
+                        frontierVoiceRow(provider: .elevenlabs, id: v.id, name: v.name, desc: v.desc, isSelected: voice.config.elevenlabsVoiceId == v.id) {
                             voice.config.elevenlabsVoiceId = v.id
                         }
                     }
@@ -160,7 +160,7 @@ struct VoiceTabView: View {
 
             case .system:
                 EyebrowLabel("APPLE SYSTEM & ENHANCED VOICES")
-                HStack {
+                HStack(spacing: 10) {
                     Text("System Voice:")
                         .font(.system(size: 13))
                         .foregroundStyle(.white)
@@ -171,7 +171,37 @@ struct VoiceTabView: View {
                         }
                     }
                     .pickerStyle(.menu)
-                    .frame(maxWidth: 280)
+                    .frame(maxWidth: 240)
+
+                    let isTestingSys = voice.testingVoiceId == voice.config.selectedVoiceIdentifier && voice.isSpeaking
+                    Button {
+                        if isTestingSys {
+                            voice.stop()
+                        } else {
+                            let name = voice.availableVoices.first(where: { $0.id == voice.config.selectedVoiceIdentifier })?.name ?? "Apple System"
+                            voice.testSpecificVoice(provider: .system, voiceId: voice.config.selectedVoiceIdentifier, name: name)
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: isTestingSys ? "stop.fill" : "play.fill")
+                                .font(.system(size: 8.5))
+                            Text(isTestingSys ? "Stop" : "Test")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .foregroundStyle(isTestingSys ? Color.white : Theme.accent)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(isTestingSys ? Color.red.opacity(0.85) : Theme.accent.opacity(0.12))
+                        )
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(isTestingSys ? Color.red : Theme.accent.opacity(0.35), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .help("Test the selected system voice")
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -208,38 +238,88 @@ struct VoiceTabView: View {
         .opacity(voice.config.masterEnabled ? 1.0 : 0.6)
     }
 
-    private func frontierVoiceRow(id: String, name: String, desc: String, isSelected: Bool, onSelect: @escaping () -> Void) -> some View {
-        Button(action: onSelect) {
-            HStack(alignment: .center, spacing: 10) {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isSelected ? Theme.accent : Theme.muted)
-                    .font(.system(size: 14))
+    private func frontierVoiceRow(
+        provider: VoiceProvider,
+        id: String,
+        name: String,
+        desc: String,
+        isSelected: Bool,
+        onSelect: @escaping () -> Void
+    ) -> some View {
+        let isTestingThis = voice.testingVoiceId == id && (voice.isSpeaking || voice.isFetchingFrontier)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(name)
-                        .font(.system(size: 13, weight: isSelected ? .bold : .medium))
-                        .foregroundStyle(isSelected ? .white : .white.opacity(0.85))
-                    Text(desc)
-                        .font(.caption2)
-                        .foregroundStyle(Theme.muted)
-                }
+        return HStack(alignment: .center, spacing: 10) {
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(isSelected ? Theme.accent : Theme.muted)
+                .font(.system(size: 14))
 
-                Spacer()
-
-                if isSelected {
-                    Text("Active")
-                        .font(.system(size: 9.5, weight: .bold))
-                        .foregroundStyle(Theme.accent)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(Theme.accent.opacity(0.2)))
-                }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.system(size: 13, weight: isSelected ? .bold : .medium))
+                    .foregroundStyle(isSelected ? .white : .white.opacity(0.85))
+                Text(desc)
+                    .font(.caption2)
+                    .foregroundStyle(Theme.muted)
             }
-            .padding(8)
-            .background(RoundedRectangle(cornerRadius: 6).fill(isSelected ? Theme.accent.opacity(0.12) : Color.white.opacity(0.02)))
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(isSelected ? Theme.accent.opacity(0.4) : Color.clear, lineWidth: 1))
+
+            Spacer()
+
+            if isSelected {
+                Text("Active")
+                    .font(.system(size: 9.5, weight: .bold))
+                    .foregroundStyle(Theme.accent)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Theme.accent.opacity(0.2)))
+            }
+
+            // Inline Audition / Test Button
+            Button {
+                if isTestingThis {
+                    voice.stop()
+                } else {
+                    voice.testSpecificVoice(provider: provider, voiceId: id, name: name)
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    if isTestingThis && voice.isFetchingFrontier {
+                        ProgressView()
+                            .controlSize(.mini)
+                    } else {
+                        Image(systemName: isTestingThis ? "stop.fill" : "play.fill")
+                            .font(.system(size: 8.5))
+                    }
+                    Text(isTestingThis ? "Stop" : "Test")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundStyle(isTestingThis ? Color.white : Theme.accent)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(isTestingThis ? Color.red.opacity(0.85) : Theme.accent.opacity(0.12))
+                )
+                .overlay(
+                    Capsule()
+                        .strokeBorder(isTestingThis ? Color.red : Theme.accent.opacity(0.35), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .help("Test the \(name) voice")
         }
-        .buttonStyle(.plain)
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isSelected ? Theme.accent.opacity(0.12) : Color.white.opacity(0.02))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(isSelected ? Theme.accent.opacity(0.4) : Color.clear, lineWidth: 1)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onSelect()
+        }
     }
 
     // MARK: - 4. API Key Configuration
