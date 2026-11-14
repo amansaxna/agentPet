@@ -1,292 +1,142 @@
 <div align="center">
   <img src="assets/banner.png" alt="AgentPet" width="100%" />
   <p>
-    <a href="https://trendshift.io/repositories/46602?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-46602" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/46602/daily?language=Swift" alt="ntd4996%2Fagentpet | Trendshift" width="250" height="55"/></a>
-  </p>
-  <p>
-    <img src="https://img.shields.io/badge/platform-macOS%2013%2B%20%C2%B7%20Windows%2010%2F11%20%C2%B7%20Linux-black" alt="macOS 13+ · Windows 10/11 · Linux" />
+    <img src="https://img.shields.io/badge/platform-macOS%2013%2B-black" alt="macOS 13+" />
     <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT" />
     <img src="https://img.shields.io/badge/Swift-SwiftUI-orange" alt="Swift" />
-    <a href="https://github.com/ntd4996/agentpet/actions"><img src="https://github.com/ntd4996/agentpet/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-    <a href="https://github.com/ntd4996/agentpet"><img src="https://img.shields.io/github/stars/ntd4996/agentpet?style=social" alt="GitHub stars" /></a>
-    <a href="https://ko-fi.com/ntd4996"><img src="https://img.shields.io/badge/Ko--fi-FF5E5B?logo=ko-fi&logoColor=white" alt="Ko-fi" /></a>
-    <a href="https://buymeacoffee.com/ntd4996"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?logo=buymeacoffee&logoColor=black" alt="Buy me a coffee" /></a>
+    <img src="https://img.shields.io/badge/Frontier%20AI%20Voice-Gemini%20%7C%20Kokoro%20%7C%20ChatGPT-purple" alt="AI Voice" />
+    <img src="https://img.shields.io/badge/Local%20Neural%20TTS-Kokoro--82M%20(INT8)-success" alt="Kokoro Local" />
   </p>
-  <p><b>A desktop pet that reacts while your AI coding agents work, and grows the more you code.</b></p>
-  <p>
-    <a href="https://agentpet.thenightwatcher.online">Website</a> ·
-    <a href="https://agentpet.thenightwatcher.online/install">Install</a> ·
-    <a href="https://agentpet.thenightwatcher.online/gallery">Pet gallery</a> ·
-    <a href="https://agentpet.thenightwatcher.online/leaderboard">Leaderboard</a> ·
-    <a href="https://discord.gg/kzFJKsZav">Discord</a>
-  </p>
-  <p><b>If AgentPet brightens your workflow, please <a href="https://github.com/ntd4996/agentpet">give it a star</a>, it genuinely helps others find it.</b></p>
-  <p>
-    <b>English</b> ·
-    <a href="docs/readme/README.vi.md">Tiếng Việt</a> ·
-    <a href="docs/readme/README.zh-Hans.md">简体中文</a> ·
-    <a href="docs/readme/README.ja.md">日本語</a>
-  </p>
+  <p><b>An ambient desktop companion that reacts while your AI coding agents work, speaks with frontier neural voices, and keeps you focused throughout your day.</b></p>
 </div>
 
 ---
 
-Run several coding agents at once (Claude Code, Codex, Gemini, Cursor and more) and it gets hard to tell who is **working**, who is **done**, and who is **waiting for your input**. AgentPet answers that at a glance: a menu-bar monitor shows every agent's live state, and a little pixel pet floats on your desktop and reacts to it all.
+## Overview
 
-It is also a **tamagotchi**. The pet is fed by real work, the tokens your agents burn and the sessions they finish, so it earns XP, levels up, unlocks achievements, and evolves as you code. Free, open source, and fully offline unless you choose to connect.
+When you run multiple coding agents (Claude Code, Codex, Gemini CLI, Cursor, Antigravity, and more), it is easy to lose track of who is **working**, who is **finished**, and who is **waiting for your input**.
 
-<div align="center">
-  <h3>Enjoying AgentPet? Help keep it free.</h3>
-  <p>It is built and given away for free. A coffee (or a star) keeps the features coming.</p>
-  <p>
-    <a href="https://ko-fi.com/ntd4996"><img src="https://img.shields.io/badge/Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Ko-fi" height="42" /></a>
-    &nbsp;
-    <a href="https://buymeacoffee.com/ntd4996"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Buy me a coffee" height="42" /></a>
-    &nbsp;
-    <a href="https://github.com/ntd4996/agentpet"><img src="https://img.shields.io/badge/Star%20on%20GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="Star on GitHub" height="42" /></a>
-  </p>
-</div>
+**AgentPet** solves this at a glance:
+- A lightweight **menu-bar monitor** tracks every agent's live state and active runtime.
+- An animated **desktop pixel companion** floats unobtrusively on your screen and reacts dynamically to your work.
+- An intelligent **Verbal Communicator** announces completions, focus phase shifts, and daily milestones using frontier AI neural voices (Google Gemini, OpenAI ChatGPT, ElevenLabs) or 100% offline local neural voices (Kokoro-82M).
+- A complete **Day Progress & Focus Suite** with 24-hour sleep/wake arcs, target exam/project countdowns, ambient audio, and motivational quotes.
 
-## Table of contents
+---
 
-- [Highlights](#highlights)
-- [Features](#features)
-- [Supported agents](#supported-agents)
-- [Screenshots](#screenshots)
-- [Install](#install)
-- [Getting started](#getting-started)
-- [Usage dashboard](#usage-dashboard)
-- [Pets](#pets)
-- [Platforms](#platforms)
-- [Community ports](#community-ports)
-- [Contributors](#contributors)
-- [Star history](#star-history)
-- [Acknowledgements](#acknowledgements)
-- [Support](#support)
-- [License](#license)
+## Key Capabilities
 
-## Highlights
+### 🎙️ Frontier & Offline Neural Voice Communicator
+- **Google Gemini 2.5 Flash Neural Speech**: Expressive cloud voices (`Aoede`, `Kore`, `Puck`, `Charon`, `Fenrir`) using Gemini's official 100% free tier (1,500 requests/day, zero credit card required).
+- **Kokoro-82M Local Neural TTS**: Pre-bundled, quantized INT8 neural model (~88 MB) running 100% locally on your Mac. Studio quality, zero API keys, and zero cloud latency.
+- **OpenAI ChatGPT Voice**: High-energy conversational voices (`Nova`, `Shimmer`, `Alloy`, `Echo`, `Fable`, `Onyx`).
+- **ElevenLabs Studio**: Ultra-realistic voices (`Rachel`, `Domi`, `Bella`, `Antoni`).
+- **Apple System & Enhanced Voices**: Offline macOS neural voices with automatic detection of Siri Natural / Enhanced packages.
+- **Inline Preview & Auditioning**: Every voice preset includes a dedicated `▶ Test` button to preview any voice instantly before selecting it.
+- **Configurable Speech Intakes**: Choose exactly what your pet announces: agent task completions, focus timer intervals, hydration reminders, hourly day chimes, and wisdom quotes.
 
-- 🐾 **Ambient desktop pet** that mirrors your agents' state without breaking your focus.
-- 📊 **Menu-bar monitor** with every agent, its project, what it's doing, and a live timer.
-- 🎮 **Raise your pet**: real tokens and finished sessions feed it, level it up, and unlock 14 achievements.
-- 🗂️ **Per-project pets** and a **per-project token usage dashboard** (daily and monthly).
-- 🔌 **11 coding agents** supported out of the box, plus a universal wrapper for anything else.
-- ☁️ **Optional web profile, leaderboard, and cross-device restore**, everything works offline if you skip it.
-- 🌍 **Localized** in English, Tiếng Việt, 简体中文 and 繁體中文.
-- 🍎 **macOS** (native Swift/SwiftUI, notarized), 🪟 **Windows** and 🐧 **Linux** (one Tauri app), with auto-update on macOS and Windows.
+### 🐾 Ambient Desktop Companion (Tamagotchi Engine)
+- **State-Aware Reactions**: Idles quietly when coding, types excitedly when an agent works, and perks up with an alert bubble when an agent needs user input.
+- **Token-Fed Progression**: The companion eats real tokens burned by your coding agents and sessions completed, earning XP to evolve through 5 distinct growth stages.
+- **Achievements & Streaks**: 14 unlockable achievements, feeding streaks, and hunger meters.
+- **Customizable Sprites**: Supports the open Codex/Petdex pet-pack format (`pet.json` + spritesheet).
 
-## Features
+### 🎯 Companion Dashboard & Productivity Suite
+- **24-Hour Day Progress & Sleep Arc**: Visual daylight/nighttime tracker with customizable bedtime chime reminders.
+- **Target Countdown Tracker**: Pin your primary milestone (e.g., target exam, product release, thesis deadline) with elapsed and remaining day counters.
+- **Focus Clock & Suite**: Integrated Pomodoro timer, stopwatch, and countdown clock.
+- **Ambient Focus Audio**: Built-in soundscapes (Lofi, White noise, Rain) to maintain deep work flow.
+- **Dream Quotes & Wisdom Engine**: Automated rotation of philosophical quotes, shlokas, and wisdom notes.
 
-**Monitor your agents**
+### 🔌 Multi-Agent Hook System
+Supports all major autonomous and interactive coding agents out of the box:
 
-- **Multi-agent monitor** in the menu bar: a live list of every agent with a colored status dot, the project, what it's doing (running tool / reason it's waiting), and a per-state timer counting in real time.
-- **At-a-glance icon**: shows how many agents are running, and turns **orange with a count** when one needs your input.
-- **Native notifications** when an agent finishes or asks for input, with sounds you can toggle.
-- **Reactive, themed speech bubbles** per agent, with a model badge, plus fully custom messages and appearance if you want them.
-- **Session history**: the last 90 days of sessions are kept locally so you can look back.
+| Agent | Detection & State |
+|---|---|
+| **Claude Code** | Working · Waiting for Input · Done |
+| **OpenAI Codex** | Working · Waiting for Input · Done |
+| **Google Gemini CLI** | Working · Waiting for Input · Done |
+| **opencode / Factory Droid** | Working · Waiting for Input · Done |
+| **Cursor / Windsurf / Antigravity** | Working · Done |
+| **GitHub Copilot / Kiro CLI** | Working · Done |
+| **Universal CLI Wrapper** | `agentpet run -- <command>` |
 
-**Raise your companion (tamagotchi)**
+---
 
-- Your pet eats the **real tokens your agents burn** and the **sessions they finish** (including subagents). It earns XP, levels up, and evolves through five stages: Hatchling → Companion → Scout → Hero → Legend.
-- **Every pet keeps its own level**, so the more you code with a companion, the more it grows.
-- **14 achievements** from real milestones: first session, level-ups, token burns (1M / 10M / 50M), session counts, feeding streaks, a Night Owl badge, and more.
-- **Stats HUD**: right-click the pet for a game-style card, level, XP, hunger, a 7-day burn chart, your streak, and your live **Claude / Codex subscription limits read directly from your sign-ins** (no extra tool needed).
-- **Break reminder** (off by default) nudges you to step away after long stretches.
+## Getting Started
 
-**Work across projects**
+### Prerequisites
+- macOS 13.0 (Ventura) or later (Apple Silicon or Intel).
+- Xcode 16 / Swift 6 or Xcode Command Line Tools.
 
-- **Per-project pets**: assign a companion to a project folder, and that project's XP goes to it.
-- **Split pet**: configured projects get their own on-screen pet; everything else shares your main one.
-- **Usage dashboard**: see exactly where your tokens go, per project and per agent, day by day and month by month (see below).
-
-**Share and sync (all optional)**
-
-- **Web profile & leaderboard**: sign in with GitHub to show your companions at [agentpet.thenightwatcher.online](https://agentpet.thenightwatcher.online/profile) and climb the community [leaderboard](https://agentpet.thenightwatcher.online/leaderboard) by level, sessions, or tokens.
-- **Cross-device restore**: sign in on a second machine (or after a fresh install) and your pets come back at the level you raised them. Progress merges forward only, so it is never undone on either machine.
-- **Community pet gallery**: browse thousands of pets, adopt one in a click, submit your own, and request new ones.
-
-AgentPet runs completely offline. Connecting only adds the web profile, leaderboard and cross-device sync, nothing leaves your machine until you sign in.
-
-## Supported agents
-
-Install a hook from **Settings** with one click, or wrap any command.
-
-| Agent | State detail |
-| --- | --- |
-| Claude Code, Codex, Gemini CLI, opencode, Factory Droid | working · **waiting for input** · done |
-| Cursor, Windsurf, Antigravity, GitHub Copilot, Kiro CLI, Pi | working · done |
-| GLM (Z.AI) | works through Claude Code automatically |
-| **Anything else** | `agentpet run -- <command>`, working while it runs, done when it exits |
-
-## Screenshots
-
-<div align="center">
-  <img src="assets/screenshot-hud.png" width="300" alt="Right-click the pet for a stats HUD: level, XP, hunger, 7-day burn and live subscription limits" />
-  <p><sub><b>Right-click the pet</b> for a game-style HUD, level, XP, hunger, a 7-day burn chart and your live Claude/Codex limits.</sub></p>
-</div>
-
-<table align="center">
-  <tr>
-    <td align="center" width="50%"><img src="assets/screenshot-menubar.png" width="380" alt="Menu bar monitor" /><br/><sub>Menu-bar monitor, every agent at a glance</sub></td>
-    <td align="center" width="50%"><img src="assets/screenshot-care.png" width="380" alt="Pet care tab" /><br/><sub>Care tab, raise your pet with real work</sub></td>
-  </tr>
-  <tr>
-    <td align="center" width="50%"><img src="assets/screenshot-settings.png" width="380" alt="Settings" /><br/><sub>Native, tabbed Settings</sub></td>
-    <td align="center" width="50%"><img src="assets/screenshot-pet.png" width="380" alt="Desktop pet" /><br/><sub>The desktop pet</sub></td>
-  </tr>
-</table>
-
-<div align="center">
-  <br/>
-  <img src="assets/screenshot-leaderboard.png" width="660" alt="Community leaderboard of raised companions" />
-  <p><sub>Community <a href="https://agentpet.thenightwatcher.online/leaderboard">leaderboard</a>, by level, sessions or tokens.</sub></p>
-  <img src="assets/demo.gif" width="600" alt="Pet reacting to agent activity" />
-</div>
-
-## Install
-
-### macOS, Homebrew
+### Building from Source
 
 ```bash
-brew install --cask ntd4996/tap/agentpet
-```
+# 1. Clone the repository
+git clone https://github.com/amansaxna/agentPet.git
+cd agentPet
 
-### macOS, direct download
-
-Grab the latest `AgentPet.dmg` from [Releases](https://github.com/ntd4996/agentpet/releases/latest), open it, and drag AgentPet to Applications. Builds are Developer ID-signed and notarized by Apple, so they open without a Gatekeeper warning, and update themselves via the menu-bar **Updates** button.
-
-### Windows
-
-Download the installer or portable build from the [website](https://agentpet.thenightwatcher.online/install) or the [releases](https://github.com/ntd4996/agentpet/releases). The first launch may show a SmartScreen warning (the Windows build isn't code-signed yet); click **More info → Run anyway**. It installs per-user (no admin) and auto-updates.
-
-### Linux
-
-Download an AppImage, `.deb`, or `.rpm` from the [website](https://agentpet.thenightwatcher.online/install) or the [releases](https://github.com/ntd4996/agentpet/releases):
-
-```bash
-# AppImage, any distro
-chmod +x AgentPet_*_amd64.AppImage && ./AgentPet_*_amd64.AppImage
-
-# Debian / Ubuntu
-sudo dpkg -i AgentPet_*_amd64.deb
-
-# Fedora / openSUSE
-sudo rpm -i AgentPet-*.x86_64.rpm
-```
-
-Same Tauri app as Windows, so it has full feature parity with macOS. From 0.1.5 the AppImage auto-updates in-app; still unsigned. If the tray icon is missing on GNOME, install an AppIndicator extension.
-
-Or install with one line, grabs the latest AppImage, no root:
-
-```bash
-curl -fsSL https://agentpet.thenightwatcher.online/install.sh | sh
-```
-
-### Build from source (macOS)
-
-```bash
-git clone https://github.com/ntd4996/agentpet.git
-cd agentpet
+# 2. Build the release application bundle
 ./scripts/build-app.sh release
+
+# 3. Launch AgentPet
 open build/AgentPet.app
 ```
 
-Requires Xcode 16 / Swift 6. The Windows app lives under [`windows/`](windows/) (Tauri + Rust).
-
-## Getting started
-
-1. Launch AgentPet, it lives in the menu bar.
-2. Open **Settings → General** and click **Install** next to Claude Code (or your agent), then **Enable** notifications.
-3. Run an agent. The pet reacts, and the menu-bar icon shows who is working or waiting.
-4. (Optional) Open **Settings → Care → Sign in with GitHub** to sync your companions and unlock the web profile, leaderboard and cross-device restore.
-
-### Uninstall
-
-1. In **Settings → General**, click **Remove** next to each connected agent (this strips AgentPet's hooks so the agents don't error after the app is gone).
-2. Remove the app and its data:
-
+To install permanently into your system applications:
 ```bash
-brew uninstall --cask agentpet          # or drag /Applications/AgentPet.app to Trash
-rm -rf ~/.agentpet                        # downloaded pets + local state
-rm -f  ~/Library/Preferences/com.agentpet.app.plist
+cp -R build/AgentPet.app /Applications/
+open /Applications/AgentPet.app
 ```
 
-## Usage dashboard
+---
 
-Sign in and open the **Usage dashboard** (in your profile menu on the website) to see where your tokens actually go:
+## Voice Configuration
 
-- **By project and by agent**, so you can tell which repo and which model is burning the most.
-- **Daily and monthly** views, with a chart and per-project / per-agent breakdowns.
-- Only the **last folder name** of each project is ever sent, never the full path, and nothing is logged until you connect.
+1. Click the **AgentPet** menu bar icon and select **Settings** (or press `⌘,`).
+2. Navigate to the **Voice** tab.
+3. Turn on the **Verbal Communicator** master switch.
+4. Select your preferred engine:
+   - **Kokoro-82M Local Neural**: 100% offline, zero setup required.
+   - **Google Gemini Neural**: Paste your Gemini API key (free tier available at [Google AI Studio](https://aistudio.google.com/)).
+   - **OpenAI ChatGPT**: Paste your OpenAI API key.
+   - **Apple System**: Select any installed macOS voice.
+5. Click the **`▶ Test`** button beside any voice row to audition it immediately.
 
-Admins get a community-wide view plus a per-user drill-down.
+---
 
-## Pets
+## Project Structure
 
-Pets use the open Codex pet-pack format (`pet.json` + a spritesheet). You can:
+```
+AgentPet/
+├── Sources/
+│   ├── AgentPetCore/        # Core models, socket daemon, hooks, FrontierVoiceService
+│   └── App/                 # SwiftUI interface, MenuBar, PetWindow, Settings, VoiceController
+├── scripts/
+│   ├── build-app.sh         # App bundle assembly & packaging script
+│   ├── kokoro_tts.py        # Kokoro ONNX local neural inference runner
+│   └── setup-kokoro.sh      # Automated local neural model downloader
+├── Assets/                  # App icons, sound effects, sprite animations
+└── Tests/                   # Unit test suite
+```
 
-- **Browse** the online library and adopt a pet in one click (Settings → Pet → Browse pets, or the [web gallery](https://agentpet.thenightwatcher.online/gallery)).
-- **Map animations** to states, resize, rename, and customise chat lines.
-- **Make your own** and [submit it](https://agentpet.thenightwatcher.online/submit) to the community gallery.
+---
 
-A starter pet is installed on first launch. **AgentPet bundles no pet art**, every pack is added at runtime, and each asset is owned by its submitter under their own license.
+## 🌟 Upstream Credits & Acknowledgements
 
-## Platforms
+This software is an enhanced fork of the open-source **[AgentPet](https://github.com/ntd4996/agentpet)** project initially created by **[Nguyễn Thành Đạt (@ntd4996)](https://github.com/ntd4996)** and community contributors.
 
-- **macOS 13 Ventura or later**, native Swift / SwiftUI, notarized, Sparkle auto-update, Homebrew cask. Apple Silicon and Intel.
-- **Windows 10 / 11 (64-bit)**, Tauri (Rust), auto-update. Feature parity with macOS.
-- **Linux (64-bit)**, the same Tauri app, shipped as AppImage / `.deb` / `.rpm`. Feature parity with macOS. In-app auto-update from 0.1.5 (AppImage); still unsigned.
+We express our sincere gratitude to the original authors and the open-source ecosystem for establishing the initial multi-agent monitoring foundation, Unix-socket IPC daemon, and pixel sprite animation engine.
 
-Under the hood: a Unix-socket daemon receives agent events from lightweight hooks, an on-device store drives the pet, and an optional Astro + Cloudflare Workers/D1 backend powers the web profile, leaderboard and usage dashboard. See [`docs/specs`](docs/specs) for the design.
+### Enhancements in this Fork:
+- **Integrated Frontier & Local Neural Voice Engine**: Support for Google Gemini 2.5 Flash TTS, pre-bundled Kokoro-82M INT8 offline neural speech, ChatGPT TTS, and ElevenLabs.
+- **Inline Voice Auditioning**: Dedicated test buttons on all voice presets for quick evaluation.
+- **Unified Companion Dashboard**: 24-hour day progress arc, bedtime reminders, milestone target tracker, dream quotes/shlokas engine, and ambient sound player.
+- **Privacy & Sandbox Hardening**: Model and script resolution strictly confined to app resources and `Application Support`, preventing unnecessary macOS permission alerts.
 
-## Community ports
-
-Alongside the official macOS, Windows, and Linux builds, the community has reimagined AgentPet with its own stack:
-
-- **Linux (Rust + GTK4)**, [agentpet-linux](https://github.com/tranhuuhuy297/agentpet-linux) by [@tranhuuhuy297](https://github.com/tranhuuhuy297). An independent, from-scratch GTK4 port for Ubuntu (Claude Code + Codex), distinct from the official Tauri Linux build above.
-
-These are separate community projects, not maintained here. Building one? Open an issue and we'll link it.
-
-## Contributors
-
-AgentPet is a community effort. Huge thanks to everyone who has shipped code, pets, translations and ports, see the full [Hall of Fame](https://agentpet.thenightwatcher.online/contributors).
-
-- **[@ntd4996](https://github.com/ntd4996)**, creator and maintainer
-- **[@hoangphison](https://github.com/hoangphison)**, co-founder
-- ...and many more contributors on the [website](https://agentpet.thenightwatcher.online/contributors) and in the repo's [contributors list](https://github.com/ntd4996/agentpet/graphs/contributors).
-
-Contributions are welcome, features, agent integrations, pets, translations and bug fixes. Open an issue or a pull request.
-
-## Star history
-
-<a href="https://www.star-history.com/?repos=ntd4996/agentpet&type=date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ntd4996/agentpet&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=ntd4996/agentpet&type=Date" />
-    <img alt="AgentPet star history chart" src="https://api.star-history.com/svg?repos=ntd4996/agentpet&type=Date" width="600" />
-  </picture>
-</a>
-
-## Acknowledgements
-
-AgentPet stands on the shoulders of an open community.
-
-- **The idea and the pet-pack format come from [Petdex](https://github.com/crafter-station/petdex)** (MIT). AgentPet is an independent, interoperable client: it reads packs in Petdex's format and can adopt them from Petdex's public API.
-- **The pets themselves are the community's.** The gallery mirrors thousands of companions from **Petdex** and **OpenPets**, alongside pets **submitted directly by AgentPet users**. Every pet asset is owned by its respective creator under their own license.
-- **Contributors and community ports** (above) shaped much of what AgentPet is today.
-
-AgentPet bundles no pet art of its own. If you hold rights to a character and want it removed, please see our [takedown page](https://agentpet.thenightwatcher.online/legal), and for pets sourced from Petdex, direct takedowns there.
-
-## Support
-
-If AgentPet saves you some tab-hunting:
-
-- ⭐ **[Star the repo](https://github.com/ntd4996/agentpet)** so more people find it.
-- ☕ **[Buy me a coffee](https://buymeacoffee.com/ntd4996)** or **[support on Ko-fi](https://ko-fi.com/ntd4996)** to fuel more features.
-
-Built by **[Nguyễn Thành Đạt (@ntd4996)](https://github.com/ntd4996)** and the community.
+---
 
 ## License
 
-MIT, see [LICENSE](LICENSE). Application code only; pet assets are not part of this repository and belong to their respective creators.
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+Pet sprite packs belong to their respective creators under their own licenses.
