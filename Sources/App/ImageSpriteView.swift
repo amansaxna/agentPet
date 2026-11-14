@@ -15,8 +15,25 @@ struct ImageSpriteView: View {
     let mood: PetMood
     /// Sprite frame rate supplied by the caller (from `PetController.spriteFPS(forMood:)`).
     let fps: Double
-    var size: CGFloat = 110
+    var width: CGFloat
+    var height: CGFloat
     @Environment(\.animationsEnabled) private var animationsEnabled
+
+    init(frames: [NSImage], mood: PetMood, fps: Double, size: CGFloat = 110) {
+        self.frames = frames
+        self.mood = mood
+        self.fps = fps
+        self.width = size
+        self.height = size
+    }
+
+    init(frames: [NSImage], mood: PetMood, fps: Double, width: CGFloat, height: CGFloat) {
+        self.frames = frames
+        self.mood = mood
+        self.fps = fps
+        self.width = width
+        self.height = height
+    }
 
     var body: some View {
         ZStack {
@@ -28,18 +45,18 @@ struct ImageSpriteView: View {
                 TimelineView(.periodic(from: .now, by: 1.0 / 8.0)) { context in
                     MoodAccessories(mood: mood,
                                     t: context.date.timeIntervalSinceReferenceDate,
-                                    size: size)
+                                    size: max(width, height))
                 }
             }
 
             if frames.isEmpty {
                 Image(systemName: "pawprint.fill").font(.system(size: 36))
             } else {
-                SpriteLayer(frames: frames, fps: fps, size: size, animate: animationsEnabled)
-                    .frame(width: size, height: size)
+                SpriteLayer(frames: frames, fps: fps, width: width, height: height, animate: animationsEnabled)
+                    .frame(width: width, height: height)
             }
         }
-        .frame(width: size, height: size)
+        .frame(width: width, height: height)
     }
 }
 
@@ -47,7 +64,8 @@ struct ImageSpriteView: View {
 private struct SpriteLayer: NSViewRepresentable {
     let frames: [NSImage]
     let fps: Double
-    let size: CGFloat
+    let width: CGFloat
+    let height: CGFloat
     var animate: Bool = true
 
     func makeNSView(context: Context) -> SpriteLayerNSView {
@@ -57,10 +75,6 @@ private struct SpriteLayer: NSViewRepresentable {
     }
 
     func updateNSView(_ view: SpriteLayerNSView, context: Context) {
-        // Called on every SwiftUI re-render of the parent (which, while a chat
-        // bubble's perpetual animations run, can be ~display-rate). `configure`
-        // is idempotent: it only rebuilds frames / restarts the timer when the
-        // frames or fps actually change, so this never churns the timer.
         view.configure(frames: frames, fps: fps, animate: animate)
     }
 
@@ -78,6 +92,8 @@ final class SpriteLayerNSView: NSView {
     private var animate: Bool = true
     private var index = 0
     private var timer: Timer?
+
+    override var isFlipped: Bool { true }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)

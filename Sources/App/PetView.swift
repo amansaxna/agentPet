@@ -51,9 +51,38 @@ struct PetView: View {
     @ObservedObject private var bindings = PetBindingsStore.shared
     @ObservedObject private var pet = PetController.shared
 
+    private var aspectRatio: CGFloat {
+        if let id = model.petID, let pack = imagePets.pack(id: id),
+           let firstFrame = pack.clips.first?.first {
+            let s = firstFrame.size
+            if s.width > 0 && s.height > 0 {
+                return s.width / s.height
+            }
+        }
+        return 1.0
+    }
+
+    private var petWidth: CGFloat {
+        if aspectRatio < 1.0 {
+            // Taller than wide (e.g. Scrapling 126x198): scale width down, keep full height
+            return max(32, size * aspectRatio)
+        } else {
+            return size
+        }
+    }
+
+    private var petHeight: CGFloat {
+        if aspectRatio > 1.0 {
+            // Wider than tall: scale height down, keep full width
+            return max(32, size / aspectRatio)
+        } else {
+            return size
+        }
+    }
+
     var body: some View {
         content
-            .frame(width: size, height: size)
+            .frame(width: petWidth, height: petHeight)
             .contentShape(Rectangle())
     }
 
@@ -61,10 +90,11 @@ struct PetView: View {
         if let id = model.petID, let pack = imagePets.pack(id: id) {
             let clip = bindings.clipIndex(packId: pack.id, clipCount: pack.clipCount, mood: model.mood)
             ImageSpriteView(frames: pack.clip(clip), mood: model.mood,
-                            fps: pet.spriteFPS(forMood: model.mood), size: size)
+                            fps: pet.spriteFPS(forMood: model.mood),
+                            width: petWidth, height: petHeight)
         } else {
             Image(systemName: "pawprint.fill")
-                .font(.system(size: size * 0.4))
+                .font(.system(size: min(petWidth, petHeight) * 0.4))
                 .foregroundStyle(.secondary)
         }
     }
@@ -1441,35 +1471,51 @@ struct ChatBubble: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            VStack(spacing: 2) {
-                if let name = projectName {
-                    Text(name)
-                        .font(.system(size: settings.fontSize.secondaryPt, weight: .regular))
-                        .foregroundStyle(dimmedTextColor)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+            ZStack(alignment: .topTrailing) {
+                VStack(spacing: 2) {
+                    if let name = projectName {
+                        Text(name)
+                            .font(.system(size: settings.fontSize.secondaryPt, weight: .regular))
+                            .foregroundStyle(dimmedTextColor)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    Text(text)
+                        .font(.system(size: settings.fontSize.primaryPt, weight: .medium))
+                        .foregroundStyle(textColor)
+                        .contentTransition(.opacity)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(5)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Text(text)
-                    .font(.system(size: settings.fontSize.primaryPt, weight: .medium))
-                    .foregroundStyle(textColor)
-                    .contentTransition(.opacity)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(4)
-                    .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 8)
+                .frame(maxWidth: 320)
+
+                Button {
+                    QuoteController.shared.dismiss()
+                    PetController.shared.dismissBubble()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(dimmedTextColor)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
+                .padding(.trailing, 5)
+                .help("Dismiss bubble")
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .frame(maxWidth: 280)
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(fill))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(borderColor, lineWidth: 1))
             .compositingGroup()
             .shadow(color: .black.opacity(0.18), radius: 5, y: 2)
+
             Triangle()
                 .fill(fill)
                 .frame(width: 12, height: 7)
                 .offset(x: tailOffset)
         }
-        .frame(maxWidth: 290)
+        .frame(maxWidth: 330)
     }
 }
 
@@ -1655,13 +1701,14 @@ struct PetQuoteBubble: View {
 
                     Button {
                         quoteCtrl.dismiss()
+                        PetController.shared.dismissBubble()
                     } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 9, weight: .bold))
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(dimmedTextColor)
                     }
                     .buttonStyle(.plain)
-                    .help("Close notification")
+                    .help("Close quote bubble")
                 }
 
                 Text("“\(quote.text)”")
