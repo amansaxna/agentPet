@@ -45,7 +45,11 @@
       </button>
       <button class="tab" data-tab="bubble">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M1.5 6.75A3.25 3.25 0 0 1 4.75 3.5h7A3.25 3.25 0 0 1 15 6.75v3.5a3.25 3.25 0 0 1-3.25 3.25H8.6l-3.35 2.8a.5.5 0 0 1-.82-.38V13.5h.32A3.25 3.25 0 0 1 1.5 10.25v-3.5z"/><path d="M16.4 7.9h1.35a4.75 4.75 0 0 1 4.75 4.75v1.6a4.75 4.75 0 0 1-4.05 4.7v2.17a.5.5 0 0 1-.83.37l-2.86-2.49h-2.51a4.74 4.74 0 0 1-3.92-2.07h3.42a4.65 4.65 0 0 0 4.65-4.65V7.9z"/></svg>
-        <span id="tab-bubble">Bubble</span>
+        <span id="tab-bubble">Agent Status</span>
+      </button>
+      <button class="tab" data-tab="voice">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+        <span id="tab-voice">Voice</span>
       </button>
       <button class="tab" data-tab="history">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
@@ -771,6 +775,62 @@
             </select>
           </div>
           <div class="gcard" id="quote-catalog-list" style="max-height: 340px; overflow-y: auto;"></div>
+        </div>
+      </div>
+
+      <!-- =============================== VOICE =============================== -->
+      <div class="page" data-page="voice">
+        <!-- Master Switch -->
+        <div class="group">
+          <div class="ghead">Text-to-Voice Verbal Communicator</div>
+          <div class="gcard pad">
+            <label class="row" style="padding: 6px 0">
+              <span class="rt">
+                <span style="font-size:14px; font-weight:700;">Enable Verbal Agent</span>
+                <span class="cap">Spoken text announcements for designated notification events</span>
+              </span>
+              <input type="checkbox" id="voice-master-toggle" />
+            </label>
+            <div style="margin-top:8px; display:flex; justify-content:flex-end;">
+              <button class="mini danger" id="voice-stop-btn" style="display:none;">⏹ Stop Voice</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Voice & Tone -->
+        <div class="group">
+          <div class="ghead">Voice Model &amp; Tone</div>
+          <div class="gcard pad">
+            <div class="row" style="padding: 6px 0">
+              <span class="rt">
+                <span>Voice Model</span>
+                <span class="cap">Select synthesized system voice</span>
+              </span>
+              <select id="voice-select" style="max-width:220px;"></select>
+            </div>
+            <div class="pop-divider" style="margin: 10px 0"></div>
+            <div class="row" style="padding: 6px 0">
+              <span class="rt">
+                <span>Speaking Rate</span>
+                <span class="cap">Speech playback speed</span>
+              </span>
+              <input type="range" id="voice-rate" min="0.5" max="1.5" step="0.1" value="1.0" style="width:120px;" />
+            </div>
+            <div class="pop-divider" style="margin: 10px 0"></div>
+            <div class="row" style="padding: 6px 0">
+              <span class="rt">
+                <span>Speech Volume</span>
+                <span class="cap">Audio output volume</span>
+              </span>
+              <input type="range" id="voice-volume" min="0" max="1" step="0.05" value="0.85" style="width:120px;" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Granular Notification Toggles -->
+        <div class="group">
+          <div class="ghead">Speech Notification Items (Opt-In)</div>
+          <div class="gcard pad" id="voice-items-list" style="display:flex; flex-direction:column; gap:10px;"></div>
         </div>
       </div>
 

@@ -57,6 +57,7 @@ public final class ReminderController: ObservableObject {
             if item.soundEnabled {
                 NSSound(named: "Tink")?.play()
             }
+            VoiceController.shared.speakReminder(title: item.title, isWater: item.kind == .water)
         }
 
         store.save(rules: engine.rules, states: engine.states)

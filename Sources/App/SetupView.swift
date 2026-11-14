@@ -13,11 +13,11 @@ struct SetupView: View {
     /// panel can slide in on the right. Provided by SettingsWindowController.
     var onResize: (CGFloat) -> Void = { _ in }
 
-    enum Tab { case general, agentStatus, pet, focus, goals, quotes, reminders, care, analysis, history, about }
+    enum Tab { case general, agentStatus, voice, pet, focus, goals, quotes, reminders, care, analysis, history, about }
     @State private var tab: Tab = .general
     @State private var demoOpen = false
 
-    private let baseWidth: CGFloat = 820
+    private let baseWidth: CGFloat = 840
     private let demoWidth: CGFloat = 740
 
     private var selectedPack: ImagePetPack? {
@@ -55,6 +55,8 @@ struct SetupView: View {
                     GeneralTab(model: model, pet: pet, onNavigateToAgentStatus: { tab = .agentStatus })
                 case .agentStatus:
                     BubbleSettingsView()
+                case .voice:
+                    VoiceTabView()
                 case .pet:
                     PetTab(pet: pet, imagePets: imagePets, model: model, selectedPack: selectedPack)
                 case .focus:
@@ -100,6 +102,7 @@ struct SetupView: View {
             HStack(spacing: 4) {
                 TabButton(icon: "gearshape.fill", label: "General", selected: tab == .general) { tab = .general }
                 TabButton(icon: "sparkles.tv", label: "Agent Status", selected: tab == .agentStatus) { tab = .agentStatus }
+                TabButton(icon: "waveform.badge.mic", label: "Voice", selected: tab == .voice) { tab = .voice }
                 TabButton(icon: "pawprint.fill", label: "Pet", selected: tab == .pet) { tab = .pet }
                 TabButton(icon: "timer", label: "Focus", selected: tab == .focus) { tab = .focus }
                 TabButton(icon: "target", label: "Goals", selected: tab == .goals) { tab = .goals }

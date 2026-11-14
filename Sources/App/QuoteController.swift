@@ -67,6 +67,7 @@ public final class QuoteController: ObservableObject {
 
         self.currentQuote = engine.nextQuote()
         PetController.shared.relocalize()
+        VoiceController.shared.speakQuote(self.currentQuote)
     }
 
     /// Fetches a structured quote from FavQs API or ZenQuotes live and presents it.
@@ -85,9 +86,11 @@ public final class QuoteController: ObservableObject {
             self.currentQuote = liveItem
             PetController.shared.relocalize()
             PetController.shared.flashReactiveLine("FavQs Live Quote updated ✨")
+            VoiceController.shared.speakQuote(liveItem)
         } else {
             self.currentQuote = engine.nextQuote()
             PetController.shared.relocalize()
+            VoiceController.shared.speakQuote(self.currentQuote)
         }
     }
 
@@ -100,6 +103,7 @@ public final class QuoteController: ObservableObject {
         self.isDismissed = false
         PetController.shared.relocalize()
         PetController.shared.flashReactiveLine("Quote: \(item.category.displayName) ✨")
+        VoiceController.shared.speakQuote(item)
     }
 
     public func dismiss() {
