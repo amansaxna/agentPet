@@ -27,6 +27,8 @@ public final class FrontierVoiceService: @unchecked Sendable {
         switch config.provider {
         case .gemini:
             audioData = try await fetchGeminiSpeech(text: text, voice: config.geminiVoice, apiKey: resolvedKey(config.geminiApiKey, env: "GEMINI_API_KEY"))
+        case .kokoro:
+            audioData = try await fetchKokoroSpeech(text: text, voice: config.kokoroVoice)
         case .openai:
             audioData = try await fetchOpenAISpeech(text: text, voice: config.openaiVoice, apiKey: resolvedKey(config.openaiApiKey, env: "OPENAI_API_KEY"))
         case .elevenlabs:
@@ -149,7 +151,81 @@ public final class FrontierVoiceService: @unchecked Sendable {
         return header + pcmData
     }
 
-    // MARK: - 2. OpenAI ChatGPT Speech
+    // MARK: - 2. Kokoro-82M Local Neural TTS
+
+    private func fetchKokoroSpeech(text: String, voice: String) async throws -> Data {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let pythonBin = "\(home)/.agentpet/kokoro-env/bin/python"
+        let modelFile = "\(home)/.agentpet/kokoro/kokoro-v0_19.onnx"
+        let voicesFile = "\(home)/.agentpet/kokoro/voices.bin"
+
+        guard FileManager.default.fileExists(atPath: pythonBin) &&
+              FileManager.default.fileExists(atPath: modelFile) &&
+              FileManager.default.fileExists(atPath: voicesFile) else {
+            throw NSError(domain: "KokoroVoice", code: 404, userInfo: [
+                NSLocalizedDescriptionKey: "Kokoro model or environment not found. Run ./scripts/setup-kokoro.sh or install in Settings → Voice."
+            ])
+        }
+
+        let bundleScript = Bundle.main.path(forResource: "kokoro_tts", ofType: "py")
+        let projectScript = "\(Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent().path)/scripts/kokoro_tts.py"
+        let fallbackScript = "\(home)/Documents/Claude/Projects/agentpet/scripts/kokoro_tts.py"
+        let scriptPath: String
+        if let b = bundleScript, FileManager.default.fileExists(atPath: b) {
+            scriptPath = b
+        } else if FileManager.default.fileExists(atPath: fallbackScript) {
+            scriptPath = fallbackScript
+        } else if FileManager.default.fileExists(atPath: projectScript) {
+            scriptPath = projectScript
+        } else {
+            throw NSError(domain: "KokoroVoice", code: 404, userInfo: [
+                NSLocalizedDescriptionKey: "scripts/kokoro_tts.py script not found."
+            ])
+        }
+
+        let selectedVoice = voice.isEmpty ? "af_sarah" : voice
+        let tempOut = cacheDir.appendingPathComponent("kokoro_\(UUID().uuidString).wav")
+
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: pythonBin)
+                process.arguments = [
+                    scriptPath,
+                    "--text", text,
+                    "--voice", selectedVoice,
+                    "--output", tempOut.path
+                ]
+
+                let pipe = Pipe()
+                process.standardError = pipe
+                process.standardOutput = pipe
+
+                do {
+                    try process.run()
+                    process.waitUntilExit()
+
+                    if process.terminationStatus == 0,
+                       let data = try? Data(contentsOf: tempOut), !data.isEmpty {
+                        try? FileManager.default.removeItem(at: tempOut)
+                        continuation.resume(returning: data)
+                    } else {
+                        let errData = pipe.fileHandleForReading.readDataToEndOfFile()
+                        let errStr = String(data: errData, encoding: .utf8) ?? "Exit code \(process.terminationStatus)"
+                        try? FileManager.default.removeItem(at: tempOut)
+                        continuation.resume(throwing: NSError(domain: "KokoroVoice", code: Int(process.terminationStatus), userInfo: [
+                            NSLocalizedDescriptionKey: "Kokoro synthesis error: \(errStr)"
+                        ]))
+                    }
+                } catch {
+                    try? FileManager.default.removeItem(at: tempOut)
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    // MARK: - 3. OpenAI ChatGPT Speech
 
     private func fetchOpenAISpeech(text: String, voice: String, apiKey: String) async throws -> Data {
         guard !apiKey.isEmpty else {
@@ -228,6 +304,7 @@ public final class FrontierVoiceService: @unchecked Sendable {
     private func currentVoice(for config: VoiceConfig) -> String {
         switch config.provider {
         case .gemini: return config.geminiVoice
+        case .kokoro: return config.kokoroVoice
         case .openai: return config.openaiVoice
         case .elevenlabs: return config.elevenlabsVoiceId
         case .system: return config.selectedVoiceIdentifier

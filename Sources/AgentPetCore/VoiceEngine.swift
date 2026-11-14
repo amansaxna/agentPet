@@ -4,6 +4,7 @@ import Foundation
 /// Voice generation backends: Frontier AI models (Gemini, OpenAI ChatGPT, ElevenLabs) or native offline system.
 public enum VoiceProvider: String, Codable, CaseIterable, Identifiable, Sendable {
     case gemini
+    case kokoro
     case openai
     case elevenlabs
     case system
@@ -14,6 +15,8 @@ public enum VoiceProvider: String, Codable, CaseIterable, Identifiable, Sendable
         switch self {
         case .gemini:
             return "Google Gemini Neural (100% Free Tier · 1,500 req/day)"
+        case .kokoro:
+            return "Kokoro-82M Local Neural (100% Free · Offline Studio Quality)"
         case .openai:
             return "OpenAI ChatGPT Voice (Nova / Shimmer / Alloy)"
         case .elevenlabs:
@@ -26,6 +29,7 @@ public enum VoiceProvider: String, Codable, CaseIterable, Identifiable, Sendable
     public var shortName: String {
         switch self {
         case .gemini: return "Gemini"
+        case .kokoro: return "Kokoro Local"
         case .openai: return "ChatGPT"
         case .elevenlabs: return "ElevenLabs"
         case .system: return "Apple System"
@@ -34,6 +38,10 @@ public enum VoiceProvider: String, Codable, CaseIterable, Identifiable, Sendable
 
     public var isFrontier: Bool {
         self != .system
+    }
+
+    public var isLocalOffline: Bool {
+        self == .kokoro || self == .system
     }
 }
 
@@ -142,6 +150,7 @@ public struct VoiceConfig: Codable, Equatable, Sendable {
 
     // Frontier Model Selections
     public var geminiVoice: String
+    public var kokoroVoice: String
     public var openaiVoice: String
     public var elevenlabsVoiceId: String
 
@@ -156,6 +165,7 @@ public struct VoiceConfig: Codable, Equatable, Sendable {
         openaiApiKey: String = "",
         elevenlabsApiKey: String = "",
         geminiVoice: String = "Aoede",
+        kokoroVoice: String = "af_sarah",
         openaiVoice: String = "nova",
         elevenlabsVoiceId: String = "21m00Tcm4TlvDq8ikWAM"
     ) {
@@ -169,6 +179,7 @@ public struct VoiceConfig: Codable, Equatable, Sendable {
         self.openaiApiKey = openaiApiKey
         self.elevenlabsApiKey = elevenlabsApiKey
         self.geminiVoice = geminiVoice
+        self.kokoroVoice = kokoroVoice
         self.openaiVoice = openaiVoice
         self.elevenlabsVoiceId = elevenlabsVoiceId
     }

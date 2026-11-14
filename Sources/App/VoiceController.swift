@@ -38,13 +38,24 @@ public final class VoiceController: NSObject, ObservableObject, AVSpeechSynthesi
     private var audioPlayer: AVAudioPlayer?
     private let storeKey = "agentpet.voice_config"
 
-    // Frontier Voice Presets
+    // Frontier & Local Voice Presets
     public static let geminiVoices: [(id: String, name: String, desc: String)] = [
         ("Aoede", "Aoede", "Warm, expressive, natural, and engaging (Recommended)"),
         ("Kore", "Kore", "Soothing, gentle, calm, and conversational"),
         ("Puck", "Puck", "Playful, bright, dynamic, and upbeat"),
         ("Charon", "Charon", "Deep, resonant, authoritative, and steady"),
         ("Fenrir", "Fenrir", "Crisp, clear, direct, and energetic")
+    ]
+
+    public static let kokoroVoices: [(id: String, name: String, desc: String)] = [
+        ("af_sarah", "Sarah", "Warm, conversational, natural American female (Recommended)"),
+        ("af_bella", "Bella", "Expressive, clear, and articulate American female"),
+        ("af_nicole", "Nicole", "Gentle, soothing, and calm American female"),
+        ("af_sky", "Sky", "Bright, upbeat, dynamic American female"),
+        ("am_adam", "Adam", "Deep, resonant, confident American male narrator"),
+        ("am_michael", "Michael", "Natural, smooth, conversational American male"),
+        ("bf_emma", "Emma", "Refined, articulate British female"),
+        ("bm_george", "George", "Deep, warm, storytelling British male")
     ]
 
     public static let openaiVoices: [(id: String, name: String, desc: String)] = [
@@ -117,6 +128,33 @@ public final class VoiceController: NSObject, ObservableObject, AVSpeechSynthesi
     public func openMacOSVoiceSettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.universalaccess?SpokenContent") {
             NSWorkspace.shared.open(url)
+        }
+    }
+
+    public var isKokoroInstalled: Bool {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let pythonBin = "\(home)/.agentpet/kokoro-env/bin/python"
+        let modelFile = "\(home)/.agentpet/kokoro/kokoro-v0_19.onnx"
+        let voicesFile = "\(home)/.agentpet/kokoro/voices.bin"
+        return FileManager.default.fileExists(atPath: pythonBin) &&
+               FileManager.default.fileExists(atPath: modelFile) &&
+               FileManager.default.fileExists(atPath: voicesFile)
+    }
+
+    public func installKokoro() async throws {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let script = "\(home)/Documents/Claude/Projects/agentpet/scripts/setup-kokoro.sh"
+        guard FileManager.default.fileExists(atPath: script) else {
+            throw NSError(domain: "Kokoro", code: 404, userInfo: [NSLocalizedDescriptionKey: "setup-kokoro.sh script not found"])
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = [script]
+        try process.run()
+        process.waitUntilExit()
+        if process.terminationStatus != 0 {
+            throw NSError(domain: "Kokoro", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "Setup script failed with exit code \(process.terminationStatus)"])
         }
     }
 

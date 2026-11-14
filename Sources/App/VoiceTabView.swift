@@ -128,6 +128,16 @@ struct VoiceTabView: View {
                     }
                 }
 
+            case .kokoro:
+                EyebrowLabel("KOKORO-82M LOCAL NEURAL VOICE PRESETS")
+                VStack(spacing: 6) {
+                    ForEach(VoiceController.kokoroVoices, id: \.id) { v in
+                        frontierVoiceRow(id: v.id, name: v.name, desc: v.desc, isSelected: voice.config.kokoroVoice == v.id) {
+                            voice.config.kokoroVoice = v.id
+                        }
+                    }
+                }
+
             case .openai:
                 EyebrowLabel("OPENAI CHATGPT NEURAL VOICE PRESETS")
                 VStack(spacing: 6) {
@@ -292,6 +302,63 @@ struct VoiceTabView: View {
                     }
                 }
 
+            case .kokoro:
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text("Kokoro-82M Local Runtime")
+                                    .font(.system(size: 12.5, weight: .bold))
+                                    .foregroundStyle(.white)
+
+                                Text(voice.isKokoroInstalled ? "READY · OFFLINE" : "NOT INSTALLED")
+                                    .font(.system(size: 8.5, weight: .black))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(voice.isKokoroInstalled ? Color.green.opacity(0.25) : Color.orange.opacity(0.25)))
+                                    .foregroundStyle(voice.isKokoroInstalled ? Color.green : Color.orange)
+                            }
+                            Text("100% Free · Completely Offline · Zero API Key · Apple Silicon Optimized")
+                                .font(.caption2)
+                                .foregroundStyle(Theme.muted)
+                        }
+
+                        Spacer()
+
+                        if !voice.isKokoroInstalled {
+                            Button {
+                                Task {
+                                    try? await voice.installKokoro()
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.down.circle.fill")
+                                    Text("Setup Kokoro (1-Click)")
+                                }
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Capsule().fill(Theme.accent))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    HStack(spacing: 6) {
+                        Image(systemName: voice.isKokoroInstalled ? "checkmark.circle.fill" : "info.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(voice.isKokoroInstalled ? .green : .orange)
+                        Text(voice.isKokoroInstalled
+                             ? "Kokoro ONNX model weights and voices are loaded in ~/.agentpet/kokoro. Fast, private, studio-quality speech."
+                             : "Click 'Setup Kokoro' to automatically configure the lightweight ONNX environment.")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.8))
+                    }
+                    .padding(6)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(voice.isKokoroInstalled ? Color.green.opacity(0.1) : Color.orange.opacity(0.1)))
+                }
+
             case .openai:
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
@@ -439,6 +506,8 @@ struct VoiceTabView: View {
         switch prov {
         case .gemini:
             return "Google Gemini Flash Audio produces rich, warm, dynamic human speech with authentic inflection."
+        case .kokoro:
+            return "Kokoro-82M is a state-of-the-art open-weight model running 100% locally on your Mac. Studio quality, zero API key, zero cloud latency."
         case .openai:
             return "OpenAI ChatGPT Speech models (tts-1) generate the warm, conversational voice heard in ChatGPT."
         case .elevenlabs:
