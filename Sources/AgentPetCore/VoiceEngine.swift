@@ -1,6 +1,42 @@
 // Sources/AgentPetCore/VoiceEngine.swift
 import Foundation
 
+/// Voice generation backends: Frontier AI models (Gemini, OpenAI ChatGPT, ElevenLabs) or native offline system.
+public enum VoiceProvider: String, Codable, CaseIterable, Identifiable, Sendable {
+    case gemini
+    case openai
+    case elevenlabs
+    case system
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .gemini:
+            return "Google Gemini Neural (Aoede / Kore / Puck)"
+        case .openai:
+            return "OpenAI ChatGPT Voice (Nova / Shimmer / Alloy)"
+        case .elevenlabs:
+            return "ElevenLabs Studio Voice (Rachel / Adam)"
+        case .system:
+            return "Apple System / Siri (Offline)"
+        }
+    }
+
+    public var shortName: String {
+        switch self {
+        case .gemini: return "Gemini"
+        case .openai: return "ChatGPT"
+        case .elevenlabs: return "ElevenLabs"
+        case .system: return "Apple System"
+        }
+    }
+
+    public var isFrontier: Bool {
+        self != .system
+    }
+}
+
 /// Specific notification categories that can produce spoken verbal announcements.
 public enum VoiceSpeechItem: String, Codable, CaseIterable, Identifiable, Sendable {
     case quotes
@@ -93,22 +129,47 @@ public enum VoiceSpeechItem: String, Codable, CaseIterable, Identifiable, Sendab
 /// User configuration for the verbal agent.
 public struct VoiceConfig: Codable, Equatable, Sendable {
     public var masterEnabled: Bool
+    public var provider: VoiceProvider
     public var selectedVoiceIdentifier: String
     public var speechRate: Float
     public var volume: Float
     public var enabledItems: Set<VoiceSpeechItem>
 
+    // Frontier Neural Voice Keys
+    public var geminiApiKey: String
+    public var openaiApiKey: String
+    public var elevenlabsApiKey: String
+
+    // Frontier Model Selections
+    public var geminiVoice: String
+    public var openaiVoice: String
+    public var elevenlabsVoiceId: String
+
     public init(
         masterEnabled: Bool = false,
+        provider: VoiceProvider = .gemini,
         selectedVoiceIdentifier: String = "",
         speechRate: Float = 0.5,
         volume: Float = 0.85,
-        enabledItems: Set<VoiceSpeechItem> = [.agentCompletion, .quotes]
+        enabledItems: Set<VoiceSpeechItem> = [.agentCompletion, .quotes],
+        geminiApiKey: String = "",
+        openaiApiKey: String = "",
+        elevenlabsApiKey: String = "",
+        geminiVoice: String = "Aoede",
+        openaiVoice: String = "nova",
+        elevenlabsVoiceId: String = "21m00Tcm4TlvDq8ikWAM"
     ) {
         self.masterEnabled = masterEnabled
+        self.provider = provider
         self.selectedVoiceIdentifier = selectedVoiceIdentifier
         self.speechRate = speechRate
         self.volume = max(0.0, min(1.0, volume))
         self.enabledItems = enabledItems
+        self.geminiApiKey = geminiApiKey
+        self.openaiApiKey = openaiApiKey
+        self.elevenlabsApiKey = elevenlabsApiKey
+        self.geminiVoice = geminiVoice
+        self.openaiVoice = openaiVoice
+        self.elevenlabsVoiceId = elevenlabsVoiceId
     }
 }

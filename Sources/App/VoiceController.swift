@@ -15,12 +15,14 @@ public struct VoiceOption: Identifiable, Hashable {
     }
 }
 
-/// Manages native macOS text-to-speech verbal announcements using AVSpeechSynthesizer.
+/// Manages frontier neural models (Gemini, ChatGPT) and native macOS speech synthesis.
 @MainActor
-public final class VoiceController: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
+public final class VoiceController: NSObject, ObservableObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDelegate {
     public static let shared = VoiceController()
 
     @Published public private(set) var isSpeaking: Bool = false
+    @Published public private(set) var isFetchingFrontier: Bool = false
+    @Published public private(set) var lastErrorMessage: String? = nil
     @Published public var config: VoiceConfig {
         didSet {
             saveConfig()
@@ -29,7 +31,33 @@ public final class VoiceController: NSObject, ObservableObject, AVSpeechSynthesi
     @Published public private(set) var availableVoices: [VoiceOption] = []
 
     private let synthesizer = AVSpeechSynthesizer()
+    private var audioPlayer: AVAudioPlayer?
     private let storeKey = "agentpet.voice_config"
+
+    // Frontier Voice Presets
+    public static let geminiVoices: [(id: String, name: String, desc: String)] = [
+        ("Aoede", "Aoede", "Warm, expressive, natural, and engaging (Recommended)"),
+        ("Kore", "Kore", "Soothing, gentle, calm, and conversational"),
+        ("Puck", "Puck", "Playful, bright, dynamic, and upbeat"),
+        ("Charon", "Charon", "Deep, resonant, authoritative, and steady"),
+        ("Fenrir", "Fenrir", "Crisp, clear, direct, and energetic")
+    ]
+
+    public static let openaiVoices: [(id: String, name: String, desc: String)] = [
+        ("nova", "Nova", "Warm, energetic, and engaging (ChatGPT Default Favorite)"),
+        ("shimmer", "Shimmer", "Clear, expressive, bright, and cheerful"),
+        ("alloy", "Alloy", "Balanced, neutral, and clear"),
+        ("echo", "Echo", "Smooth, well-rounded, and natural"),
+        ("fable", "Fable", "Expressive, storytelling with British cadence"),
+        ("onyx", "Onyx", "Deep, confident, and resonant")
+    ]
+
+    public static let elevenlabsVoices: [(id: String, name: String, desc: String)] = [
+        ("21m00Tcm4TlvDq8ikWAM", "Rachel", "Calm, professional, natural American voice"),
+        ("AZnzlk1XvdvUeBnXmlld", "Domi", "Energetic, clear, and friendly"),
+        ("EXAVITQu4vr4xnSDxMaL", "Bella", "Expressive, warm, and highly engaging"),
+        ("ErXwobaYiN019PkySvjV", "Antoni", "Smooth, pleasant, and articulate")
+    ]
 
     private override init() {
         let defaults = UserDefaults.standard
@@ -47,7 +75,6 @@ public final class VoiceController: NSObject, ObservableObject, AVSpeechSynthesi
 
     private func loadAvailableVoices() {
         let systemVoices = AVSpeechSynthesisVoice.speechVoices()
-        // Filter primarily English and localized voices for pleasant output
         let options = systemVoices
             .filter { $0.language.starts(with: "en") || $0.language.starts(with: "kn") || $0.language.starts(with: "hi") }
             .map { v in
@@ -82,23 +109,10 @@ public final class VoiceController: NSObject, ObservableObject, AVSpeechSynthesi
         config.enabledItems.contains(item)
     }
 
-    public func setVoice(identifier: String) {
-        config.selectedVoiceIdentifier = identifier
-    }
-
-    public func setRate(_ rate: Float) {
-        config.speechRate = max(0.1, min(1.0, rate))
-    }
-
-    public func setVolume(_ volume: Float) {
-        config.volume = max(0.0, min(1.0, volume))
-    }
-
-    /// Primary utterance dispatcher.
+    /// Primary utterance dispatcher with frontier model support and offline fallback.
     public func speak(_ text: String, for item: VoiceSpeechItem? = nil, force: Bool = false) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
-        // If not forced test, enforce master toggle and item enablement
         if !force {
             guard config.masterEnabled else { return }
             if let item = item {
@@ -106,9 +120,49 @@ public final class VoiceController: NSObject, ObservableObject, AVSpeechSynthesi
             }
         }
 
+        stop()
+        lastErrorMessage = nil
+
+        // If frontier provider is active, use high-fidelity neural audio
+        if config.provider.isFrontier {
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                self.isFetchingFrontier = true
+                do {
+                    let audioData = try await FrontierVoiceService.shared.fetchAudio(text: text, config: self.config)
+                    self.isFetchingFrontier = false
+                    self.playAudioData(audioData)
+                } catch {
+                    self.isFetchingFrontier = false
+                    self.lastErrorMessage = error.localizedDescription
+                    // Fall back cleanly to system TTS so announcement is never lost
+                    self.speakWithSystemSynthesizer(text: text)
+                }
+            }
+        } else {
+            speakWithSystemSynthesizer(text: text)
+        }
+    }
+
+    private func playAudioData(_ data: Data) {
+        do {
+            let player = try AVAudioPlayer(data: data)
+            player.delegate = self
+            player.volume = config.volume
+            player.prepareToPlay()
+            self.audioPlayer = player
+            self.isSpeaking = true
+            player.play()
+        } catch {
+            lastErrorMessage = "Audio player error: \(error.localizedDescription)"
+            speakWithSystemSynthesizer(text: "")
+        }
+    }
+
+    private func speakWithSystemSynthesizer(text: String) {
+        guard !text.isEmpty else { return }
         let utterance = AVSpeechUtterance(string: text)
 
-        // Select voice
         if !config.selectedVoiceIdentifier.isEmpty,
            let voice = AVSpeechSynthesisVoice(identifier: config.selectedVoiceIdentifier) {
             utterance.voice = voice
@@ -116,15 +170,9 @@ public final class VoiceController: NSObject, ObservableObject, AVSpeechSynthesi
             utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
         }
 
-        // Apply rate: AVSpeechUtteranceDefaultSpeechRate is ~0.5
         let mappedRate = AVSpeechUtteranceMinimumSpeechRate + (config.speechRate * (AVSpeechUtteranceDefaultSpeechRate - AVSpeechUtteranceMinimumSpeechRate) * 1.5)
         utterance.rate = max(AVSpeechUtteranceMinimumSpeechRate, min(AVSpeechUtteranceMaximumSpeechRate, mappedRate))
         utterance.volume = config.volume
-        utterance.pitchMultiplier = 1.0
-
-        if synthesizer.isSpeaking {
-            synthesizer.stopSpeaking(at: .immediate)
-        }
 
         isSpeaking = true
         synthesizer.speak(utterance)
@@ -134,7 +182,12 @@ public final class VoiceController: NSObject, ObservableObject, AVSpeechSynthesi
         if synthesizer.isSpeaking {
             synthesizer.stopSpeaking(at: .immediate)
         }
+        if let player = audioPlayer, player.isPlaying {
+            player.stop()
+        }
+        audioPlayer = nil
         isSpeaking = false
+        isFetchingFrontier = false
     }
 
     public func testSpeech(item: VoiceSpeechItem) {
@@ -146,7 +199,6 @@ public final class VoiceController: NSObject, ObservableObject, AVSpeechSynthesi
     public func speakQuote(_ quote: QuoteItem) {
         guard config.masterEnabled && isItemEnabled(.quotes) else { return }
 
-        // For Sanskrit or Kannada, prioritize speaking the English meaning or transliteration cleanly
         let cleanText: String
         if quote.category == .shloka || quote.category == .kannada {
             if !quote.authorOrMeaning.isEmpty {
@@ -207,17 +259,20 @@ public final class VoiceController: NSObject, ObservableObject, AVSpeechSynthesi
         speak(text, for: .focusPhase)
     }
 
-    // MARK: - AVSpeechSynthesizerDelegate
+    // MARK: - Delegates
 
     public nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        Task { @MainActor in
-            self.isSpeaking = false
-        }
+        Task { @MainActor in self.isSpeaking = false }
     }
 
     public nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        Task { @MainActor in self.isSpeaking = false }
+    }
+
+    public nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         Task { @MainActor in
             self.isSpeaking = false
+            self.audioPlayer = nil
         }
     }
 

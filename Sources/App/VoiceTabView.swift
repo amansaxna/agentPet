@@ -2,7 +2,7 @@
 import SwiftUI
 import AgentPetCore
 
-/// Dedicated settings tab for Text-to-Voice Verbal Communicator.
+/// Settings tab for Frontier Neural Models (Gemini, ChatGPT) & Verbal Communicator.
 struct VoiceTabView: View {
     @ObservedObject private var voice = VoiceController.shared
 
@@ -10,7 +10,10 @@ struct VoiceTabView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 masterSwitchCard
-                voiceAttributesCard
+                providerSelectionCard
+                frontierVoiceCard
+                apiKeyCard
+                audioAttributesCard
                 notificationItemsCard
             }
             .padding(20)
@@ -28,11 +31,22 @@ struct VoiceTabView: View {
                         .foregroundStyle(voice.config.masterEnabled ? Color.green : Theme.muted)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Verbal Communicator")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(.white)
+                        HStack(spacing: 6) {
+                            Text("Verbal Communicator")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(.white)
 
-                        Text(voice.config.masterEnabled ? "Active — Speaks designated notification items" : "Muted — All verbal speech is disabled")
+                            if voice.config.provider.isFrontier {
+                                Text("FRONTIER NEURAL")
+                                    .font(.system(size: 8.5, weight: .black))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(Color.purple.opacity(0.3)))
+                                    .foregroundStyle(Color.purple)
+                            }
+                        }
+
+                        Text(voice.config.masterEnabled ? "Active — Speaks designated notification items via \(voice.config.provider.shortName)" : "Muted — All verbal speech is disabled")
                             .font(.caption)
                             .foregroundStyle(Theme.muted)
                     }
@@ -40,11 +54,14 @@ struct VoiceTabView: View {
 
                 Spacer()
 
-                if voice.isSpeaking {
+                if voice.isSpeaking || voice.isFetchingFrontier {
                     Button {
                         voice.stop()
                     } label: {
                         HStack(spacing: 4) {
+                            if voice.isFetchingFrontier {
+                                ProgressView().controlSize(.mini)
+                            }
                             Image(systemName: "stop.fill")
                             Text("Stop Voice")
                         }
@@ -60,72 +77,93 @@ struct VoiceTabView: View {
                 Toggle("", isOn: $voice.config.masterEnabled)
                     .toggleStyle(.switch)
             }
+
+            if let err = voice.lastErrorMessage {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange)
+                    Text(err).font(.caption).foregroundStyle(.orange).lineLimit(2)
+                }
+                .padding(6)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color.orange.opacity(0.12)))
+            }
         }
         .themedCard()
     }
 
-    // MARK: - 2. Voice & Tone Controls
+    // MARK: - 2. Provider Selection
 
-    private var voiceAttributesCard: some View {
+    private var providerSelectionCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            EyebrowLabel("VOICE SYNTHESIS ENGINE (FRONTIER AI OR OFFLINE)")
+
+            Picker("", selection: $voice.config.provider) {
+                ForEach(VoiceProvider.allCases) { prov in
+                    Text(prov.displayName).tag(prov)
+                }
+            }
+            .pickerStyle(.radioGroup)
+            .padding(.vertical, 2)
+
+            Text(providerDescription(voice.config.provider))
+                .font(.caption)
+                .foregroundStyle(Theme.muted)
+        }
+        .themedCard()
+        .disabled(!voice.config.masterEnabled)
+        .opacity(voice.config.masterEnabled ? 1.0 : 0.6)
+    }
+
+    // MARK: - 3. Frontier Voice Model Selection
+
+    private var frontierVoiceCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            EyebrowLabel("VOICE SELECTION & ATTRIBUTES")
+            switch voice.config.provider {
+            case .gemini:
+                EyebrowLabel("GOOGLE GEMINI NEURAL VOICE PRESETS")
+                VStack(spacing: 6) {
+                    ForEach(VoiceController.geminiVoices, id: \.id) { v in
+                        frontierVoiceRow(id: v.id, name: v.name, desc: v.desc, isSelected: voice.config.geminiVoice == v.id) {
+                            voice.config.geminiVoice = v.id
+                        }
+                    }
+                }
 
-            // Voice selection
-            HStack {
-                Text("Voice Model:")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.white)
+            case .openai:
+                EyebrowLabel("OPENAI CHATGPT NEURAL VOICE PRESETS")
+                VStack(spacing: 6) {
+                    ForEach(VoiceController.openaiVoices, id: \.id) { v in
+                        frontierVoiceRow(id: v.id, name: v.name, desc: v.desc, isSelected: voice.config.openaiVoice == v.id) {
+                            voice.config.openaiVoice = v.id
+                        }
+                    }
+                }
 
-                Spacer()
+            case .elevenlabs:
+                EyebrowLabel("ELEVENLABS STUDIO VOICE PRESETS")
+                VStack(spacing: 6) {
+                    ForEach(VoiceController.elevenlabsVoices, id: \.id) { v in
+                        frontierVoiceRow(id: v.id, name: v.name, desc: v.desc, isSelected: voice.config.elevenlabsVoiceId == v.id) {
+                            voice.config.elevenlabsVoiceId = v.id
+                        }
+                    }
+                }
 
-                if voice.availableVoices.isEmpty {
-                    Text("System Default").font(.system(size: 12)).foregroundStyle(Theme.muted)
-                } else {
+            case .system:
+                EyebrowLabel("APPLE SYSTEM VOICE")
+                HStack {
+                    Text("System Voice:")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white)
+                    Spacer()
                     Picker("", selection: $voice.config.selectedVoiceIdentifier) {
-                        Text("System Recommended Voice").tag("")
+                        Text("Default Voice").tag("")
                         ForEach(voice.availableVoices) { v in
-                            Text("\(v.name) (\(v.language)) · \(v.quality)").tag(v.id)
+                            Text("\(v.name) (\(v.language))").tag(v.id)
                         }
                     }
                     .pickerStyle(.menu)
-                    .frame(maxWidth: 260)
+                    .frame(maxWidth: 240)
                 }
-            }
-
-            Divider().overlay(Theme.cardStroke)
-
-            // Speed / Rate slider
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text("Speaking Pace:")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.white)
-                    Spacer()
-                    Text(rateLabel(voice.config.speechRate))
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundStyle(Theme.muted)
-                }
-
-                Slider(value: $voice.config.speechRate, in: 0.1...1.0, step: 0.05)
-                    .tint(Theme.accent)
-            }
-
-            Divider().overlay(Theme.cardStroke)
-
-            // Volume slider
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text("Speech Volume:")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.white)
-                    Spacer()
-                    Text("\(Int(voice.config.volume * 100))%")
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundStyle(Theme.muted)
-                }
-
-                Slider(value: $voice.config.volume, in: 0.0...1.0, step: 0.05)
-                    .tint(Theme.accent)
             }
         }
         .themedCard()
@@ -133,12 +171,141 @@ struct VoiceTabView: View {
         .opacity(voice.config.masterEnabled ? 1.0 : 0.6)
     }
 
-    // MARK: - 3. Granular Notification Speech Items
+    private func frontierVoiceRow(id: String, name: String, desc: String, isSelected: Bool, onSelect: @escaping () -> Void) -> some View {
+        Button(action: onSelect) {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isSelected ? Theme.accent : Theme.muted)
+                    .font(.system(size: 14))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name)
+                        .font(.system(size: 13, weight: isSelected ? .bold : .medium))
+                        .foregroundStyle(isSelected ? .white : .white.opacity(0.85))
+                    Text(desc)
+                        .font(.caption2)
+                        .foregroundStyle(Theme.muted)
+                }
+
+                Spacer()
+
+                if isSelected {
+                    Text("Active")
+                        .font(.system(size: 9.5, weight: .bold))
+                        .foregroundStyle(Theme.accent)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Theme.accent.opacity(0.2)))
+                }
+            }
+            .padding(8)
+            .background(RoundedRectangle(cornerRadius: 6).fill(isSelected ? Theme.accent.opacity(0.12) : Color.white.opacity(0.02)))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(isSelected ? Theme.accent.opacity(0.4) : Color.clear, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - 4. API Key Configuration
+
+    private var apiKeyCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            EyebrowLabel("FRONTIER MODEL API CREDENTIALS")
+
+            switch voice.config.provider {
+            case .gemini:
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Google Gemini API Key:")
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(.white)
+                        Spacer()
+                        Link("Get Free API Key ↗", destination: URL(string: "https://aistudio.google.com/apikey")!)
+                            .font(.caption)
+                    }
+
+                    SecureField("Paste your Gemini API key (AIzaSy...)", text: $voice.config.geminiApiKey)
+                        .textFieldStyle(.roundedBorder)
+
+                    Text("Stored locally in macOS keychain/defaults. Generates ultra-expressive human-like speech with Gemini Flash audio.")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.muted)
+                }
+
+            case .openai:
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("OpenAI API Key:")
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(.white)
+                        Spacer()
+                        Link("Get OpenAI Key ↗", destination: URL(string: "https://platform.openai.com/api-keys")!)
+                            .font(.caption)
+                    }
+
+                    SecureField("Paste your OpenAI API key (sk-...)", text: $voice.config.openaiApiKey)
+                        .textFieldStyle(.roundedBorder)
+
+                    Text("Uses OpenAI tts-1 model for the natural voice used in ChatGPT Voice Mode.")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.muted)
+                }
+
+            case .elevenlabs:
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("ElevenLabs API Key:")
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(.white)
+                        Spacer()
+                        Link("Get ElevenLabs Key ↗", destination: URL(string: "https://elevenlabs.io")!)
+                            .font(.caption)
+                    }
+
+                    SecureField("Paste your ElevenLabs API key", text: $voice.config.elevenlabsApiKey)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+            case .system:
+                Text("Offline Apple speech synthesizers require no API keys.")
+                    .font(.caption)
+                    .foregroundStyle(Theme.muted)
+            }
+        }
+        .themedCard()
+        .disabled(!voice.config.masterEnabled)
+        .opacity(voice.config.masterEnabled ? 1.0 : 0.6)
+    }
+
+    // MARK: - 5. Audio Attributes
+
+    private var audioAttributesCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            EyebrowLabel("AUDIO VOLUME")
+
+            HStack {
+                Text("Volume:")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white)
+                Spacer()
+                Text("\(Int(voice.config.volume * 100))%")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(Theme.muted)
+            }
+
+            Slider(value: $voice.config.volume, in: 0.0...1.0, step: 0.05)
+                .tint(Theme.accent)
+        }
+        .themedCard()
+        .disabled(!voice.config.masterEnabled)
+        .opacity(voice.config.masterEnabled ? 1.0 : 0.6)
+    }
+
+    // MARK: - 6. Notification Items
 
     private var notificationItemsCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                EyebrowLabel("GRANULAR SPEECH NOTIFICATIONS (OPT-IN)")
+                EyebrowLabel("SPEECH NOTIFICATION TRIGGERS (OPT-IN)")
                 Spacer()
                 Text("\(voice.config.enabledItems.count) of \(VoiceSpeechItem.allCases.count) enabled")
                     .font(.caption2)
@@ -186,7 +353,7 @@ struct VoiceTabView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.mini)
-                    .help("Listen to a sample preview phrase for this notification")
+                    .help("Listen to a sample preview phrase using the chosen voice model")
 
                     Toggle("", isOn: Binding(
                         get: { voice.isItemEnabled(item) },
@@ -207,10 +374,16 @@ struct VoiceTabView: View {
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(isEnabled ? Theme.accent.opacity(0.3) : Theme.cardStroke, lineWidth: 1))
     }
 
-    private func rateLabel(_ rate: Float) -> String {
-        if rate < 0.35 { return "Slow" }
-        if rate < 0.65 { return "Normal" }
-        if rate < 0.85 { return "Fast" }
-        return "Very Fast"
+    private func providerDescription(_ prov: VoiceProvider) -> String {
+        switch prov {
+        case .gemini:
+            return "Google Gemini Flash Audio produces rich, warm, dynamic human speech with authentic inflection."
+        case .openai:
+            return "OpenAI ChatGPT Speech models (tts-1) generate the warm, conversational voice heard in ChatGPT."
+        case .elevenlabs:
+            return "ElevenLabs creates ultra-realistic studio quality voices with hyper-nuanced intonation."
+        case .system:
+            return "Uses Apple's built-in offline speech synthesizer with zero latency and zero network access."
+        }
     }
 }
