@@ -149,21 +149,48 @@ struct VoiceTabView: View {
                 }
 
             case .system:
-                EyebrowLabel("APPLE SYSTEM VOICE")
+                EyebrowLabel("APPLE SYSTEM & ENHANCED VOICES")
                 HStack {
                     Text("System Voice:")
                         .font(.system(size: 13))
                         .foregroundStyle(.white)
                     Spacer()
                     Picker("", selection: $voice.config.selectedVoiceIdentifier) {
-                        Text("Default Voice").tag("")
                         ForEach(voice.availableVoices) { v in
-                            Text("\(v.name) (\(v.language))").tag(v.id)
+                            Text(v.displayName).tag(v.id)
                         }
                     }
                     .pickerStyle(.menu)
-                    .frame(maxWidth: 240)
+                    .frame(maxWidth: 280)
                 }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .foregroundStyle(Theme.accent)
+                        Text("Want realistic human voices for free offline?")
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                    Text("macOS includes free Neural & Enhanced voices (Ava, Zoe, Siri Natural) that sound far more realistic than default robotic voices. You can download them in 1-click inside macOS System Settings.")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.muted)
+
+                    Button {
+                        voice.openMacOSVoiceSettings()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.down.circle.fill")
+                            Text("Open macOS Settings → Download Free Neural Voices")
+                        }
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Theme.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 2)
+                }
+                .padding(8)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.04)))
             }
         }
         .themedCard()
@@ -213,22 +240,56 @@ struct VoiceTabView: View {
 
             switch voice.config.provider {
             case .gemini:
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("Google Gemini API Key:")
-                            .font(.system(size: 12.5, weight: .medium))
-                            .foregroundStyle(.white)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text("Google Gemini API Key:")
+                                    .font(.system(size: 12.5, weight: .medium))
+                                    .foregroundStyle(.white)
+
+                                Text("100% FREE TIER")
+                                    .font(.system(size: 8.5, weight: .black))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(Color.green.opacity(0.25)))
+                                    .foregroundStyle(Color.green)
+                            }
+                            Text("1,500 free requests per day · Zero credit card required")
+                                .font(.caption2)
+                                .foregroundStyle(Theme.muted)
+                        }
+
                         Spacer()
-                        Link("Get Free API Key ↗", destination: URL(string: "https://aistudio.google.com/apikey")!)
-                            .font(.caption)
+
+                        Link(destination: URL(string: "https://aistudio.google.com/apikey")!) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "key.fill")
+                                Text("Get Free Key (1-Click) ↗")
+                            }
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(Theme.accent))
+                        }
                     }
 
                     SecureField("Paste your Gemini API key (AIzaSy...)", text: $voice.config.geminiApiKey)
                         .textFieldStyle(.roundedBorder)
 
-                    Text("Stored locally in macOS keychain/defaults. Generates ultra-expressive human-like speech with Gemini Flash audio.")
-                        .font(.caption2)
-                        .foregroundStyle(Theme.muted)
+                    if voice.config.geminiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: "info.circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.cyan)
+                            Text("To hear the cutting-edge Gemini voice (Aoede, Kore, Puck) for free, tap 'Get Free Key', sign in with Google, copy your key, and paste it here.")
+                                .font(.caption2)
+                                .foregroundStyle(.cyan.opacity(0.9))
+                        }
+                        .padding(6)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.cyan.opacity(0.1)))
+                    }
                 }
 
             case .openai:

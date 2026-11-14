@@ -13,13 +13,13 @@ public enum VoiceProvider: String, Codable, CaseIterable, Identifiable, Sendable
     public var displayName: String {
         switch self {
         case .gemini:
-            return "Google Gemini Neural (Aoede / Kore / Puck)"
+            return "Google Gemini Neural (100% Free Tier · 1,500 req/day)"
         case .openai:
             return "OpenAI ChatGPT Voice (Nova / Shimmer / Alloy)"
         case .elevenlabs:
-            return "ElevenLabs Studio Voice (Rachel / Adam)"
+            return "ElevenLabs Studio Voice (Free Tier: 10,000 chars/mo)"
         case .system:
-            return "Apple System / Siri (Offline)"
+            return "Apple Siri / Enhanced Neural (100% Free · Offline)"
         }
     }
 

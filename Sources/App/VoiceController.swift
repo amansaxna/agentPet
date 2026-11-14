@@ -9,9 +9,13 @@ public struct VoiceOption: Identifiable, Hashable {
     public let name: String
     public let language: String
     public let quality: String
+    public let isEnhancedOrNatural: Bool
 
     public var displayName: String {
-        "\(name) (\(language))"
+        if isEnhancedOrNatural {
+            return "✨ \(name) (\(language)) [\(quality)]"
+        }
+        return "\(name) (\(language))"
     }
 }
 
@@ -77,17 +81,43 @@ public final class VoiceController: NSObject, ObservableObject, AVSpeechSynthesi
         let systemVoices = AVSpeechSynthesisVoice.speechVoices()
         let options = systemVoices
             .filter { $0.language.starts(with: "en") || $0.language.starts(with: "kn") || $0.language.starts(with: "hi") }
-            .map { v in
-                VoiceOption(
+            .map { v -> VoiceOption in
+                let isNatural = v.quality == .enhanced || v.identifier.contains("siri")
+                let qualityLabel: String
+                if v.quality == .enhanced {
+                    qualityLabel = "Enhanced Neural"
+                } else if v.identifier.contains("siri") {
+                    qualityLabel = "Siri Natural"
+                } else {
+                    qualityLabel = "Standard"
+                }
+                return VoiceOption(
                     id: v.identifier,
                     name: v.name,
                     language: v.language,
-                    quality: v.quality == .enhanced ? "Enhanced" : "Standard"
+                    quality: qualityLabel,
+                    isEnhancedOrNatural: isNatural
                 )
             }
-            .sorted { $0.name < $1.name }
+            .sorted { (a, b) in
+                if a.isEnhancedOrNatural != b.isEnhancedOrNatural {
+                    return a.isEnhancedOrNatural && !b.isEnhancedOrNatural
+                }
+                return a.name < b.name
+            }
 
         self.availableVoices = options
+
+        if config.selectedVoiceIdentifier.isEmpty,
+           let naturalVoice = options.first(where: { $0.isEnhancedOrNatural }) {
+            config.selectedVoiceIdentifier = naturalVoice.id
+        }
+    }
+
+    public func openMacOSVoiceSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.universalaccess?SpokenContent") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     public func toggleMaster() {
@@ -166,6 +196,8 @@ public final class VoiceController: NSObject, ObservableObject, AVSpeechSynthesi
         if !config.selectedVoiceIdentifier.isEmpty,
            let voice = AVSpeechSynthesisVoice(identifier: config.selectedVoiceIdentifier) {
             utterance.voice = voice
+        } else if let best = AVSpeechSynthesisVoice.speechVoices().first(where: { $0.quality == .enhanced || $0.identifier.contains("siri") }) {
+            utterance.voice = best
         } else {
             utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
         }
