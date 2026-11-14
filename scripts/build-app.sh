@@ -48,6 +48,27 @@ if [ -d "$BINDIR/AgentPet_agentpet.bundle" ]; then
     cp -R "$BINDIR/AgentPet_agentpet.bundle" "$APP/Contents/Resources/"
 fi
 
+# Bundle Kokoro Local TTS runner & pre-bundled weights (INT8 quantized ~88MB)
+mkdir -p "$APP/Contents/Resources/kokoro"
+cp "$ROOT/scripts/kokoro_tts.py" "$APP/Contents/Resources/kokoro/kokoro_tts.py"
+cp "$ROOT/scripts/kokoro_tts.py" "$APP/Contents/Resources/kokoro_tts.py"
+[ -f "$ROOT/scripts/setup-kokoro.sh" ] && cp "$ROOT/scripts/setup-kokoro.sh" "$APP/Contents/Resources/setup-kokoro.sh"
+
+KOKORO_SOURCE="$HOME/.agentpet/kokoro"
+if [ -d "$KOKORO_SOURCE" ]; then
+    if [ -f "$KOKORO_SOURCE/kokoro-v1.0.int8.onnx" ]; then
+        echo "Pre-bundling Kokoro INT8 model into .app bundle (~88MB)..."
+        cp "$KOKORO_SOURCE/kokoro-v1.0.int8.onnx" "$APP/Contents/Resources/kokoro/"
+    elif [ -f "$KOKORO_SOURCE/kokoro-v0_19.onnx" ]; then
+        echo "Pre-bundling Kokoro model into .app bundle..."
+        cp "$KOKORO_SOURCE/kokoro-v0_19.onnx" "$APP/Contents/Resources/kokoro/"
+    fi
+    if [ -f "$KOKORO_SOURCE/voices.bin" ]; then
+        echo "Pre-bundling Kokoro voices into .app bundle (~5.5MB)..."
+        cp "$KOKORO_SOURCE/voices.bin" "$APP/Contents/Resources/kokoro/"
+    fi
+fi
+
 # Bundle Sparkle.framework (auto-update). SwiftPM links it via @rpath but does
 # not place it inside a hand-assembled .app, so we copy it into Frameworks and
 # point the binary's rpath there. ditto preserves the framework symlinks.

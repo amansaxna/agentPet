@@ -18,11 +18,11 @@ if [ ! -f "$ENV_DIR/bin/python" ]; then
     "$ENV_DIR/bin/pip" install kokoro-onnx soundfile
 fi
 
-# 2. Download ONNX weights if missing
-ONNX_FILE="$DEST_DIR/kokoro-v0_19.onnx"
+# 2. Download INT8 ONNX weights (~88MB, 72% smaller and faster CPU inference)
+ONNX_FILE="$DEST_DIR/kokoro-v1.0.int8.onnx"
 if [ ! -f "$ONNX_FILE" ]; then
-    echo "Downloading kokoro-v0_19.onnx (~310MB)..."
-    curl -L -o "$ONNX_FILE" "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/kokoro-v0_19.onnx"
+    echo "Downloading kokoro-v1.0.int8.onnx (~88MB)..."
+    curl -L -o "$ONNX_FILE" "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.int8.onnx"
 fi
 
 # 3. Download voices.bin if missing
