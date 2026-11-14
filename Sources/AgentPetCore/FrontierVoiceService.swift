@@ -47,7 +47,7 @@ public final class FrontierVoiceService: @unchecked Sendable {
         }
 
         let selectedVoice = voice.isEmpty ? "Aoede" : voice
-        let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(apiKey)")!
+        let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=\(apiKey)")!
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
@@ -57,7 +57,7 @@ public final class FrontierVoiceService: @unchecked Sendable {
             "contents": [
                 [
                     "parts": [
-                        ["text": "Read the following message aloud clearly and naturally without commentary: \(text)"]
+                        ["text": text]
                     ]
                 ]
             ],
@@ -89,12 +89,64 @@ public final class FrontierVoiceService: @unchecked Sendable {
               let firstPart = parts.first,
               let inlineData = firstPart["inlineData"] as? [String: Any],
               let base64 = inlineData["data"] as? String,
-              let audioData = Data(base64Encoded: base64) else {
+              let pcmData = Data(base64Encoded: base64) else {
             throw NSError(domain: "GeminiVoice", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to parse audio from Gemini response"])
         }
 
-        // Gemini audio is PCM/WAV format
-        return audioData
+        let mimeType = inlineData["mimeType"] as? String ?? ""
+        if mimeType.contains("L16") || mimeType.contains("pcm") || mimeType.isEmpty {
+            let sampleRate = extractSampleRate(from: mimeType) ?? 24000
+            return createWavData(pcmData: pcmData, sampleRate: sampleRate)
+        }
+
+        return pcmData
+    }
+
+    private func extractSampleRate(from mimeType: String) -> Int? {
+        let parts = mimeType.components(separatedBy: ";")
+        for part in parts {
+            let trimmed = part.trimmingCharacters(in: .whitespaces)
+            if trimmed.starts(with: "rate=") {
+                let rateStr = trimmed.replacingOccurrences(of: "rate=", with: "")
+                return Int(rateStr)
+            }
+        }
+        return nil
+    }
+
+    private func createWavData(pcmData: Data, sampleRate: Int = 24000, channels: Int = 1, bitDepth: Int = 16) -> Data {
+        var header = Data()
+        let byteRate = sampleRate * channels * (bitDepth / 8)
+        let blockAlign = channels * (bitDepth / 8)
+        let subchunk2Size = pcmData.count
+        let chunkSize = 36 + subchunk2Size
+
+        header.append(contentsOf: "RIFF".utf8)
+        var chunkSize32 = UInt32(chunkSize).littleEndian
+        header.append(Data(bytes: &chunkSize32, count: 4))
+        header.append(contentsOf: "WAVE".utf8)
+
+        header.append(contentsOf: "fmt ".utf8)
+        var subchunk1Size = UInt32(16).littleEndian
+        header.append(Data(bytes: &subchunk1Size, count: 4))
+        var audioFormat = UInt16(1).littleEndian
+        header.append(Data(bytes: &audioFormat, count: 2))
+        var numChannels = UInt16(channels).littleEndian
+        header.append(Data(bytes: &numChannels, count: 2))
+        var sampleRate32 = UInt32(sampleRate).littleEndian
+        header.append(Data(bytes: &sampleRate32, count: 4))
+        var byteRate32 = UInt32(byteRate).littleEndian
+        header.append(Data(bytes: &byteRate32, count: 4))
+        var blockAlign16 = UInt16(blockAlign).littleEndian
+        header.append(Data(bytes: &blockAlign16, count: 2))
+        var bitsPerSample = UInt16(bitDepth).littleEndian
+        header.append(Data(bytes: &bitsPerSample, count: 2))
+
+        header.append(contentsOf: "data".utf8)
+        var subchunk2Size32 = UInt32(subchunk2Size).littleEndian
+        header.append(Data(bytes: &subchunk2Size32, count: 4))
+
+        return header + pcmData
     }
 
     // MARK: - 2. OpenAI ChatGPT Speech
