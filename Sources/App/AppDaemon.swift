@@ -329,6 +329,12 @@ final class AppDaemon: ObservableObject {
             NotificationManager.shared.notify(
                 title: "\(project) finished", body: "Agent completed its turn")
             SoundSettings.shared.play(.done)
+            let agentName = session.title ?? session.agentName ?? session.agentKind.rawValue.capitalized
+            VoiceController.shared.speakAgentCompletion(
+                agent: agentName,
+                project: project,
+                line: session.message ?? "All done!"
+            )
             PetCareController.shared.recordMeal(petID: careTarget(forProject: session.project))
             ProjectUsageStore.shared.recordSession(
                 project: session.project,

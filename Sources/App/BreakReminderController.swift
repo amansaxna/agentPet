@@ -69,9 +69,11 @@ final class BreakReminderController {
                 title: "Time for a break",
                 body: "You've worked \(mins) min — rest \(brk) min 😴")
             NSSound(named: "Purr")?.play()
+            VoiceController.shared.speakBreak(message: "You've worked \(mins) minutes. Time to rest for \(brk) minutes.")
             PetController.shared.beginBreakRest(
                 line: "Worked \(mins) min — let's rest \(brk) min 😴")
         case .breakOver:
+            VoiceController.shared.speakBreak(message: "Break is over. Ready to focus again!")
             PetController.shared.endBreakRest(line: "Break's over — back to it! 💪")
         }
     }

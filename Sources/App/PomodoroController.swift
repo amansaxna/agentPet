@@ -43,6 +43,7 @@ public final class PomodoroController: ObservableObject {
         }
         PetController.shared.flashReactiveLine("Focus started: \(state.activeSubject) 🎯")
         PetController.shared.update(sessions: AppDaemon.shared.sessions)
+        VoiceController.shared.speakFocusPhase(phase: .focus)
     }
 
     public func startBreak(isLong: Bool = false) {
@@ -56,6 +57,7 @@ public final class PomodoroController: ObservableObject {
         }
         PetController.shared.flashReactiveLine("Break started: Relax ☕")
         PetController.shared.update(sessions: AppDaemon.shared.sessions)
+        VoiceController.shared.speakFocusPhase(phase: isLong ? .longBreak : .shortBreak)
     }
 
     public func stop() {
@@ -171,6 +173,7 @@ public final class PomodoroController: ObservableObject {
                 body: "Great job focusing on \(subject). Take a well-deserved break!"
             )
             PetController.shared.flashCelebrate(line: "Focus completed! +1 Meal 🌟")
+            VoiceController.shared.speakFocusPhase(phase: .shortBreak)
 
         case .breakCompleted(let phase):
             if config.soundEnabled {
@@ -182,6 +185,7 @@ public final class PomodoroController: ObservableObject {
                 body: "Ready to dive back into focus?"
             )
             PetController.shared.flashReactiveLine("Break over! Let's get to work 💪")
+            VoiceController.shared.speakFocusPhase(phase: .focus)
 
         case .phaseChanged:
             break

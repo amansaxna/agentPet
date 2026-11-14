@@ -74,6 +74,7 @@ public final class DayProgressController: ObservableObject {
     public func showChime() {
         updateSnapshot()
         isChimeBubbleVisible = true
+        VoiceController.shared.speakHourlyChime(snapshot: currentSnapshot)
 
         autoDismissTimer?.invalidate()
         if config.autoDismissSeconds > 0 {

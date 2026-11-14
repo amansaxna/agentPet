@@ -21,6 +21,7 @@ import * as pomodoro from "./pomodoro";
 import * as reminders from "./reminders";
 import * as goals from "./goals";
 import * as quotes from "./quotes";
+import * as voice from "./voice";
 import { agentLabel } from "./state";
 import { tokenString } from "./statscard";
 
@@ -2054,6 +2055,93 @@ initDemo();
 initOnboarding();
 initFocusTab();
 initGoalsTab();
+initVoiceTab();
+
+function initVoiceTab() {
+  const masterToggle = document.getElementById("voice-master-toggle") as HTMLInputElement | null;
+  const voiceSelect = document.getElementById("voice-select") as HTMLSelectElement | null;
+  const rateSlider = document.getElementById("voice-rate") as HTMLInputElement | null;
+  const volSlider = document.getElementById("voice-volume") as HTMLInputElement | null;
+  const stopBtn = document.getElementById("voice-stop-btn") as HTMLButtonElement | null;
+  const itemsHost = document.getElementById("voice-items-list");
+
+  if (!masterToggle) return;
+
+  const cfg = voice.voiceService.getConfig();
+  masterToggle.checked = cfg.masterEnabled;
+  if (rateSlider) rateSlider.value = cfg.speechRate.toString();
+  if (volSlider) volSlider.value = cfg.volume.toString();
+
+  masterToggle.onchange = () => {
+    voice.voiceService.updateConfig({ masterEnabled: masterToggle.checked });
+  };
+
+  if (rateSlider) {
+    rateSlider.oninput = () => {
+      voice.voiceService.updateConfig({ speechRate: parseFloat(rateSlider.value) });
+    };
+  }
+
+  if (volSlider) {
+    volSlider.oninput = () => {
+      voice.voiceService.updateConfig({ volume: parseFloat(volSlider.value) });
+    };
+  }
+
+  if (stopBtn) {
+    stopBtn.onclick = () => {
+      voice.voiceService.stop();
+    };
+  }
+
+  // Populate voices
+  const populateVoices = () => {
+    if (!voiceSelect) return;
+    const voices = voice.voiceService.getVoices();
+    voiceSelect.innerHTML = `<option value="">System Recommended</option>` +
+      voices.map((v) => `<option value="${v.voiceURI}" ${v.voiceURI === cfg.selectedVoiceURI ? 'selected' : ''}>${v.name} (${v.lang})</option>`).join("");
+  };
+  populateVoices();
+  setTimeout(populateVoices, 500);
+
+  if (voiceSelect) {
+    voiceSelect.onchange = () => {
+      voice.voiceService.updateConfig({ selectedVoiceURI: voiceSelect.value });
+    };
+  }
+
+  // Populate items
+  if (itemsHost) {
+    itemsHost.innerHTML = voice.VOICE_ITEMS.map((item) => {
+      const isEn = voice.voiceService.isItemEnabled(item.id);
+      return `
+        <div class="row" style="align-items:flex-start; padding: 8px 10px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+          <span style="font-size: 16px; margin-right: 10px; margin-top: 2px;">${item.icon}</span>
+          <span class="rt" style="flex:1;">
+            <div style="font-size: 13px; font-weight: 600; color: #fff;">${item.title}</div>
+            <div class="cap dim" style="margin-top: 2px;">${item.description}</div>
+          </span>
+          <div style="display:flex; align-items:center; gap:8px; margin-left:10px;">
+            <button class="mini voice-test-btn" data-id="${item.id}" title="Test sample voice announcement">▶ Test</button>
+            <input type="checkbox" class="voice-item-toggle" data-id="${item.id}" ${isEn ? 'checked' : ''} />
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    itemsHost.querySelectorAll<HTMLButtonElement>(".voice-test-btn").forEach((btn) => {
+      btn.onclick = () => {
+        voice.voiceService.testSpeech(btn.dataset.id as voice.VoiceSpeechItem);
+      };
+    });
+
+    itemsHost.querySelectorAll<HTMLInputElement>(".voice-item-toggle").forEach((chk) => {
+      chk.onchange = () => {
+        voice.voiceService.toggleItem(chk.dataset.id as voice.VoiceSpeechItem);
+      };
+    });
+  }
+}
 
 // First-run welcome overlay (opened as settings.html?onboarding=1 by the tray /
 // Rust on first launch). Mirrors the macOS OnboardingView: pick a pet, connect
