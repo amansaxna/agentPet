@@ -308,12 +308,18 @@ final class PetController: ObservableObject {
         syncWindows()
     }
 
+    public func dismissBubble() {
+        chatLine = ""
+        chatLineCount = 0
+        syncWindows()
+    }
+
     // MARK: - Chat line (reusable per-mood line picker)
 
     /// The idle "doing nothing" chatter, care-coloured (hunger / budget anxiety).
     /// Shared by the aggregate `refreshChat` and per-project home windows.
     private func idleLine(petID: String? = nil) -> String {
-        if QuoteController.shared.config.showInPetBubble {
+        if QuoteController.shared.config.showInPetBubble && !QuoteController.shared.isDismissed {
             let quote = QuoteController.shared.currentQuote
             return "“\(quote.text)” — \(quote.category.displayName)"
         }
