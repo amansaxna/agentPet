@@ -237,6 +237,7 @@ struct PetStatsView: View {
                     Button {
                         withAnimation(.easeInOut(duration: 0.12)) {
                             selectedFocusTab = mode
+                            focusClock.activeMode = mode
                         }
                     } label: {
                         HStack(spacing: 3) {

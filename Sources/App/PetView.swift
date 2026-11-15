@@ -142,14 +142,20 @@ struct FloatingPetView: View {
                 let isFocusActive = pomoCtrl.state.phase != .idle || focusClock.isAnyActive
                 let hasVisibleAgents = bubbleSettings.multiAgentBubbleEnabled
                     && !AgentBubble.visible(model.sessions, settings: bubbleSettings).isEmpty
+                let isQuoteActive = quoteCtrl.config.showInPetBubble && !quoteCtrl.isDismissed
 
                 if let due = reminderCtrl.dueReminders.first {
                     alignedToPet(PetReminderBubble(due: due))
                 } else {
+                    // Avoid duplicating notification pills: when Focus or Quotes are active,
+                    // their own notification capsules include music controls.
+                    let toolsHaveMusicControls = isFocusActive || isQuoteActive
+                    let showStandaloneMusic = musicCtrl.isPlaying && !toolsHaveMusicControls
+
                     let hasUnderlying = (isFocusActive || hasVisibleAgents)
-                        || (quoteCtrl.config.showInPetBubble && !quoteCtrl.isDismissed)
+                        || isQuoteActive
                         || !model.chatLine.isEmpty
-                        || musicCtrl.isPlaying
+                        || showStandaloneMusic
 
                     alignedToPet(
                         VStack(spacing: 4) {
@@ -157,17 +163,17 @@ struct FloatingPetView: View {
                                 PetDayProgressBubble(snapshot: dayProgressCtrl.currentSnapshot, showTail: !hasUnderlying)
                             }
 
-                            if musicCtrl.isPlaying {
+                            if showStandaloneMusic {
                                 PetMusicBubble(
                                     station: musicCtrl.currentStation,
                                     onStop: { musicCtrl.stop() },
-                                    showTail: !(isFocusActive || hasVisibleAgents || (quoteCtrl.config.showInPetBubble && !quoteCtrl.isDismissed) || !model.chatLine.isEmpty)
+                                    showTail: !(isFocusActive || hasVisibleAgents || isQuoteActive || !model.chatLine.isEmpty)
                                 )
                             }
 
                             if isFocusActive || hasVisibleAgents {
                                 AgentBubble(sessions: model.sessions, showPomodoro: isFocusActive)
-                            } else if quoteCtrl.config.showInPetBubble && !quoteCtrl.isDismissed {
+                            } else if isQuoteActive {
                                 PetQuoteBubble(quote: quoteCtrl.currentQuote)
                             } else if !model.chatLine.isEmpty {
                                 ChatBubble(text: model.chatLine,
@@ -514,43 +520,54 @@ private struct FocusSessionBubbleRow: View {
     }
 
     var body: some View {
-        if pomoCtrl.state.phase != .idle {
-            pomodoroRow
-        } else if focusClock.isTimerActive {
+        switch focusClock.activeMode {
+        case .timer where focusClock.isTimerActive:
             timerRow
-        } else if focusClock.isStopwatchActive {
+        case .stopwatch where focusClock.isStopwatchActive:
             stopwatchRow
+        case .pomodoro where pomoCtrl.state.phase != .idle:
+            pomodoroRow
+        default:
+            if focusClock.isTimerActive {
+                timerRow
+            } else if focusClock.isStopwatchActive {
+                stopwatchRow
+            } else if pomoCtrl.state.phase != .idle {
+                pomodoroRow
+            }
         }
     }
 
     // Pomodoro Row
     private var pomodoroRow: some View {
+        let isPaused = pomoCtrl.state.isPaused
         let dotColor: Color = {
-            if pomoCtrl.state.isPaused { return Color(red: 0xF5 / 255.0, green: 0x9E / 255.0, blue: 0x0B / 255.0) }
+            if isPaused { return Color(red: 0.88, green: 0.62, blue: 0.28) }
             switch pomoCtrl.state.phase {
-            case .focus: return Color(red: 0x3B / 255.0, green: 0x82 / 255.0, blue: 0xF6 / 255.0)
-            case .shortBreak, .longBreak: return Color(red: 0.13, green: 0.77, blue: 0.37)
+            case .focus: return Color(red: 0.35, green: 0.62, blue: 0.90)
+            case .shortBreak, .longBreak: return Color(red: 0.25, green: 0.75, blue: 0.50)
             case .idle: return Color.gray
             }
         }()
 
-        let actionText = pomoCtrl.state.isPaused ? "Paused" : pomoCtrl.state.phase.displayName
+        let actionText = isPaused ? "Paused" : pomoCtrl.state.phase.displayName
 
         return HStack(alignment: .center, spacing: 5) {
-            StateDot(color: dotColor, spins: !pomoCtrl.state.isPaused, style: settings.dotStyle)
-            Image(systemName: pomoCtrl.state.phase.isBreak ? "cup.and.saucer.fill" : "timer")
+            StateDot(color: dotColor, spins: !isPaused, style: settings.dotStyle)
+            Image(systemName: pomoCtrl.state.phase.isBreak ? "cup.and.saucer.fill" : "brain.head.profile")
                 .font(.system(size: iconPt, weight: .semibold))
-                .foregroundStyle(pomoCtrl.state.phase.isBreak ? Color.green : Color.blue)
+                .foregroundStyle(pomoCtrl.state.phase.isBreak ? Color(red: 0.25, green: 0.75, blue: 0.50) : Color(red: 0.35, green: 0.62, blue: 0.90))
             Text(actionText)
                 .font(.system(size: primaryPt, weight: .semibold))
-                .foregroundStyle(pomoCtrl.state.isPaused ? Color(red: 0xF5 / 255.0, green: 0x9E / 255.0, blue: 0x0B / 255.0) : textColor(0.9))
+                .foregroundStyle(isPaused ? Color(red: 0.88, green: 0.62, blue: 0.28) : textColor(0.9))
                 .lineLimit(1)
             Text(pomoCtrl.state.formattedRemaining)
                 .font(.system(size: secondaryPt, weight: .semibold))
                 .foregroundStyle(textColor(0.65)).monospacedDigit().lineLimit(1)
             actionButtons(
-                isPaused: pomoCtrl.state.isPaused,
-                onToggle: { pomoCtrl.state.isPaused ? pomoCtrl.resume() : pomoCtrl.pause() },
+                isPaused: isPaused,
+                onAddMinutes: nil,
+                onToggle: { isPaused ? pomoCtrl.resume() : pomoCtrl.pause() },
                 onStop: { pomoCtrl.stop() }
             )
         }
@@ -561,23 +578,26 @@ private struct FocusSessionBubbleRow: View {
     private var timerRow: some View {
         let tState = focusClock.timerState
         let isPaused = (tState.state == .paused)
-        let dotColor: Color = isPaused ? Color.orange : Color(red: 0x3B / 255.0, green: 0x82 / 255.0, blue: 0xF6 / 255.0)
-        let actionText = isPaused ? "Paused" : "Timer"
+        let dotColor: Color = isPaused ? Color(red: 0.88, green: 0.62, blue: 0.28) : Color(red: 0.35, green: 0.65, blue: 0.85)
+        let displayTitle = (!tState.activeSubject.isEmpty && tState.activeSubject != "Focus Timer") ? tState.activeSubject : (isPaused ? "Paused" : "Timer")
 
         return HStack(alignment: .center, spacing: 5) {
             StateDot(color: dotColor, spins: !isPaused, style: settings.dotStyle)
             Image(systemName: "timer")
                 .font(.system(size: iconPt, weight: .semibold))
-                .foregroundStyle(Color.cyan)
-            Text(actionText)
+                .foregroundStyle(Color(red: 0.35, green: 0.65, blue: 0.85))
+            Text(displayTitle)
                 .font(.system(size: primaryPt, weight: .semibold))
-                .foregroundStyle(isPaused ? Color.orange : textColor(0.9))
+                .foregroundStyle(isPaused ? Color(red: 0.88, green: 0.62, blue: 0.28) : textColor(0.9))
                 .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: 88, alignment: .leading)
             Text(tState.formattedRemaining)
                 .font(.system(size: secondaryPt, weight: .semibold))
                 .foregroundStyle(textColor(0.65)).monospacedDigit().lineLimit(1)
             actionButtons(
                 isPaused: isPaused,
+                onAddMinutes: { focusClock.addTimerMinutes(5) },
                 onToggle: { isPaused ? focusClock.resumeTimer() : focusClock.pauseTimer() },
                 onStop: { focusClock.stopTimer() }
             )
@@ -589,23 +609,26 @@ private struct FocusSessionBubbleRow: View {
     private var stopwatchRow: some View {
         let sState = focusClock.stopwatchState
         let isPaused = (sState.state == .paused)
-        let dotColor: Color = isPaused ? Color.orange : Color.green
-        let actionText = isPaused ? "Paused" : "Stopwatch"
+        let dotColor: Color = isPaused ? Color(red: 0.88, green: 0.62, blue: 0.28) : Color(red: 0.35, green: 0.75, blue: 0.60)
+        let displayTitle = (!sState.activeSubject.isEmpty && sState.activeSubject != "Focus Stopwatch" && sState.activeSubject != "Stopwatch Session") ? sState.activeSubject : (isPaused ? "Paused" : "Stopwatch")
 
         return HStack(alignment: .center, spacing: 5) {
             StateDot(color: dotColor, spins: !isPaused, style: settings.dotStyle)
             Image(systemName: "stopwatch")
                 .font(.system(size: iconPt, weight: .semibold))
-                .foregroundStyle(Color.teal)
-            Text(actionText)
+                .foregroundStyle(Color(red: 0.35, green: 0.75, blue: 0.60))
+            Text(displayTitle)
                 .font(.system(size: primaryPt, weight: .semibold))
-                .foregroundStyle(isPaused ? Color.orange : textColor(0.9))
+                .foregroundStyle(isPaused ? Color(red: 0.88, green: 0.62, blue: 0.28) : textColor(0.9))
                 .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: 88, alignment: .leading)
             Text(sState.formattedElapsed)
                 .font(.system(size: secondaryPt, weight: .semibold))
                 .foregroundStyle(textColor(0.65)).monospacedDigit().lineLimit(1)
             actionButtons(
                 isPaused: isPaused,
+                onAddMinutes: nil,
                 onToggle: { isPaused ? focusClock.resumeStopwatch() : focusClock.pauseStopwatch() },
                 onStop: { focusClock.stopStopwatch() }
             )
@@ -613,37 +636,64 @@ private struct FocusSessionBubbleRow: View {
         .frame(maxWidth: rowMaxWidth, alignment: .leading)
     }
 
-    private func actionButtons(isPaused: Bool, onToggle: @escaping () -> Void, onStop: @escaping () -> Void) -> some View {
-        HStack(spacing: 3) {
+    private func actionButtons(
+        isPaused: Bool,
+        onAddMinutes: (() -> Void)? = nil,
+        onToggle: @escaping () -> Void,
+        onStop: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: 3.5) {
             Button {
                 musicCtrl.togglePlay()
             } label: {
                 Image(systemName: musicCtrl.isPlaying ? "speaker.wave.2.fill" : "music.note")
                     .font(.system(size: 7.5, weight: .bold))
-                    .foregroundStyle(musicCtrl.isPlaying ? Color.cyan : textColor(0.75))
-                    .frame(width: 15, height: 15)
-                    .background(Circle().fill(musicCtrl.isPlaying ? Color.cyan.opacity(0.18) : textColor(0.08)))
+                    .foregroundStyle(musicCtrl.isPlaying ? Color(red: 0.38, green: 0.72, blue: 0.82) : textColor(0.65))
+                    .frame(width: 16, height: 16)
+                    .background(Circle().fill(musicCtrl.isPlaying ? Color(red: 0.38, green: 0.72, blue: 0.82).opacity(0.18) : textColor(0.08)))
             }
             .buttonStyle(.plain)
-            .help(musicCtrl.isPlaying ? "Stop Focus Music" : "Play Focus Music")
+            .contextMenu {
+                ForEach(FocusMusicStation.stations) { station in
+                    Button(station.title) {
+                        musicCtrl.selectStation(station)
+                    }
+                }
+            }
+            .help(musicCtrl.isPlaying ? "Playing: \(musicCtrl.currentStation.title) · Click to pause (Right-click to change station)" : "Play Focus Music")
+
+            if let onAddMinutes {
+                Button(action: onAddMinutes) {
+                    Text("+5m")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(textColor(0.72))
+                        .padding(.horizontal, 3.5)
+                        .frame(height: 16)
+                        .background(Capsule().fill(textColor(0.08)))
+                }
+                .buttonStyle(.plain)
+                .help("Add 5 minutes to countdown")
+            }
 
             Button(action: onToggle) {
                 Image(systemName: isPaused ? "play.fill" : "pause.fill")
                     .font(.system(size: 7.5, weight: .bold))
                     .foregroundStyle(textColor(0.75))
-                    .frame(width: 15, height: 15)
+                    .frame(width: 16, height: 16)
                     .background(Circle().fill(textColor(0.08)))
             }
             .buttonStyle(.plain)
+            .help(isPaused ? "Resume" : "Pause")
 
             Button(action: onStop) {
                 Image(systemName: "stop.fill")
                     .font(.system(size: 6.5, weight: .bold))
-                    .foregroundStyle(Color.red.opacity(0.85))
-                    .frame(width: 15, height: 15)
-                    .background(Circle().fill(Color.red.opacity(0.12)))
+                    .foregroundStyle(Color(red: 0.90, green: 0.45, blue: 0.45))
+                    .frame(width: 16, height: 16)
+                    .background(Circle().fill(Color.red.opacity(0.14)))
             }
             .buttonStyle(.plain)
+            .help("Stop session")
         }
         .padding(.leading, 2)
     }
@@ -1526,6 +1576,7 @@ struct PetMusicBubble: View {
     let onStop: () -> Void
     var showTail: Bool = true
     @ObservedObject private var settings = BubbleSettings.shared
+    @ObservedObject private var musicCtrl = FocusMusicController.shared
     @Environment(\.bubbleTailOffset) private var tailOffset
 
     private var fill: Color {
@@ -1547,30 +1598,42 @@ struct PetMusicBubble: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
-                Image(systemName: "music.note")
+                Image(systemName: "speaker.wave.2.fill")
                     .font(.system(size: 9.5, weight: .bold))
-                    .foregroundStyle(Color.cyan)
+                    .foregroundStyle(Color(red: 0.38, green: 0.72, blue: 0.82))
 
                 Text("Playing:")
-                    .font(.system(size: 9.5, weight: .semibold))
-                    .foregroundStyle(Color.primary.opacity(0.55))
+                    .font(.system(size: 9.5, weight: .medium))
+                    .foregroundStyle(Color.primary.opacity(0.50))
 
                 Text(station.title)
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Color.primary.opacity(0.9))
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color.primary.opacity(0.88))
                     .lineLimit(1)
 
+                Button {
+                    musicCtrl.nextStation()
+                } label: {
+                    Image(systemName: "forward.fill")
+                        .font(.system(size: 6.5, weight: .bold))
+                        .foregroundStyle(Color.primary.opacity(0.60))
+                        .frame(width: 15, height: 15)
+                        .background(Circle().fill(Color.primary.opacity(0.07)))
+                }
+                .buttonStyle(.plain)
+                .help("Next Station: \(musicCtrl.currentStation.title)")
+
                 Button(action: onStop) {
-                    HStack(spacing: 3) {
+                    HStack(spacing: 2.5) {
                         Image(systemName: "stop.fill")
-                            .font(.system(size: 7, weight: .black))
+                            .font(.system(size: 6.5, weight: .bold))
                         Text("Stop")
-                            .font(.system(size: 8.5, weight: .bold))
+                            .font(.system(size: 8.5, weight: .semibold))
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color(red: 0.90, green: 0.45, blue: 0.45))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2.5)
-                    .background(Capsule().fill(Color.red.opacity(0.85)))
+                    .background(Capsule().fill(Color.red.opacity(0.14)))
                 }
                 .buttonStyle(.plain)
                 .help("Stop Focus Music")
@@ -1656,14 +1719,14 @@ struct PetQuoteBubble: View {
                         } label: {
                             HStack(spacing: 2) {
                                 Image(systemName: "stop.fill")
-                                    .font(.system(size: 6.5, weight: .black))
+                                    .font(.system(size: 6.5, weight: .bold))
                                 Text("Stop Music")
-                                    .font(.system(size: 7.5, weight: .bold))
+                                    .font(.system(size: 7.5, weight: .semibold))
                             }
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color(red: 0.90, green: 0.45, blue: 0.45))
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.red.opacity(0.85)))
+                            .background(Capsule().fill(Color.red.opacity(0.14)))
                         }
                         .buttonStyle(.plain)
                         .help("Stop Focus Music")
