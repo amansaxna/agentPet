@@ -294,16 +294,12 @@ struct PetStatsView: View {
                 Circle()
                     .fill(isFocus ? Color.red : (isBreak ? Color.green : Color.gray))
                     .frame(width: 7, height: 7)
+                Image(systemName: isBreak ? "cup.and.saucer.fill" : "brain.head.profile")
+                    .font(.system(size: 9.5, weight: .bold))
+                    .foregroundStyle(isFocus ? Color.red : (isBreak ? Color.green : .white.opacity(0.45)))
                 Text(isRunning ? pomoState.phase.displayName.uppercased() : "POMODORO")
                     .font(.system(size: 9, weight: .bold)).tracking(0.8)
                     .foregroundStyle(isFocus ? Color.red : (isBreak ? Color.green : .white.opacity(0.45)))
-
-                if isRunning && !pomoState.activeSubject.isEmpty {
-                    Text("· \(pomoState.activeSubject)")
-                        .font(.system(size: 8.5, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.45))
-                        .lineLimit(1)
-                }
 
                 Spacer()
 
@@ -417,16 +413,12 @@ struct PetStatsView: View {
                 Circle()
                     .fill(isActive ? (isPaused ? Color.orange : Color.cyan) : Color.gray)
                     .frame(width: 7, height: 7)
+                Image(systemName: "timer")
+                    .font(.system(size: 9.5, weight: .bold))
+                    .foregroundStyle(isActive ? Color.cyan : .white.opacity(0.45))
                 Text(isActive ? "COUNTDOWN TIMER" : "TIMER PRESETS")
                     .font(.system(size: 9, weight: .bold)).tracking(0.8)
                     .foregroundStyle(isActive ? Color.cyan : .white.opacity(0.45))
-
-                if isActive && !tState.activeSubject.isEmpty {
-                    Text("· \(tState.activeSubject)")
-                        .font(.system(size: 8.5, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.45))
-                        .lineLimit(1)
-                }
 
                 Spacer()
 
@@ -528,16 +520,12 @@ struct PetStatsView: View {
                 Circle()
                     .fill(isActive ? (isPaused ? Color.orange : Color.green) : Color.gray)
                     .frame(width: 7, height: 7)
+                Image(systemName: "stopwatch")
+                    .font(.system(size: 9.5, weight: .bold))
+                    .foregroundStyle(isActive ? Color.green : .white.opacity(0.45))
                 Text(isActive ? "STOPWATCH RUNNING" : "STOPWATCH")
                     .font(.system(size: 9, weight: .bold)).tracking(0.8)
                     .foregroundStyle(isActive ? Color.green : .white.opacity(0.45))
-
-                if isActive && !sState.activeSubject.isEmpty {
-                    Text("· \(sState.activeSubject)")
-                        .font(.system(size: 8.5, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.45))
-                        .lineLimit(1)
-                }
 
                 Spacer()
 
