@@ -147,27 +147,28 @@ struct FloatingPetView: View {
                 if let due = reminderCtrl.dueReminders.first {
                     alignedToPet(PetReminderBubble(due: due))
                 } else {
-                    // Avoid duplicating notification pills: when Focus or Quotes are active,
-                    // their own notification capsules include music controls.
-                    let toolsHaveMusicControls = isFocusActive || isQuoteActive
-                    let showStandaloneMusic = musicCtrl.isPlaying && !toolsHaveMusicControls
+                    // Precedence:
+                    // 1. If timer / pomodoro / stopwatch is running, music controls are integrated
+                    //    directly into the focus row (suppressing the standalone music pill).
+                    // 2. When NO timer/pomodoro/stopwatch is running, and music is playing,
+                    //    show the dedicated standalone Focus Music pill.
+                    let showStandaloneMusic = musicCtrl.isPlaying && !isFocusActive
 
                     let hasUnderlying = (isFocusActive || hasVisibleAgents)
                         || isQuoteActive
                         || !model.chatLine.isEmpty
-                        || showStandaloneMusic
 
                     alignedToPet(
                         VStack(spacing: 4) {
                             if dayProgressCtrl.isChimeBubbleVisible {
-                                PetDayProgressBubble(snapshot: dayProgressCtrl.currentSnapshot, showTail: !hasUnderlying)
+                                PetDayProgressBubble(snapshot: dayProgressCtrl.currentSnapshot, showTail: !hasUnderlying && !showStandaloneMusic)
                             }
 
                             if showStandaloneMusic {
                                 PetMusicBubble(
                                     station: musicCtrl.currentStation,
                                     onStop: { musicCtrl.stop() },
-                                    showTail: !(isFocusActive || hasVisibleAgents || isQuoteActive || !model.chatLine.isEmpty)
+                                    showTail: !hasUnderlying
                                 )
                             }
 
@@ -177,7 +178,7 @@ struct FloatingPetView: View {
                                 PetQuoteBubble(quote: quoteCtrl.currentQuote)
                             } else if !model.chatLine.isEmpty {
                                 ChatBubble(text: model.chatLine,
-                                                        projectName: pet.splitPet ? model.projectName : nil)
+                                           projectName: pet.splitPet ? model.projectName : nil)
                             }
                         }
                     )
@@ -386,7 +387,13 @@ struct AgentBubble: View {
     }
 
     private var totalRows: Int {
-        groupedSessions.count + (showPomodoro ? 1 : 0)
+        var count = groupedSessions.count
+        if showPomodoro {
+            if PomodoroController.shared.state.phase != .idle { count += 1 }
+            if FocusClockController.shared.isTimerActive { count += 1 }
+            if FocusClockController.shared.isStopwatchActive { count += 1 }
+        }
+        return count
     }
 
     private var isPetChat: Bool { tailEdge == .bottom }
@@ -444,19 +451,11 @@ struct AgentBubble: View {
     static let petContentMaxWidth: CGFloat = 320
 
     private var bubbleFill: Color {
-        switch settings.theme {
-        case .light:  return Color.white.opacity(settings.opacity)
-        case .dark:   return Color(nsColor: .windowBackgroundColor).opacity(settings.opacity)
-        case .system: return Color(nsColor: .textBackgroundColor).opacity(settings.opacity)
-        }
+        settings.bubbleFill
     }
 
     private var borderColor: Color {
-        switch settings.theme {
-        case .light:  return .black.opacity(0.06)
-        case .dark:   return .white.opacity(0.12)
-        case .system: return Color.primary.opacity(0.08)
-        }
+        settings.bubbleBorderColor
     }
 
     @ViewBuilder
@@ -486,11 +485,7 @@ struct AgentBubble: View {
     }
 
     private func textColor(_ opacity: Double) -> Color {
-        switch settings.theme {
-        case .light:  return .black.opacity(opacity)
-        case .dark:   return .white.opacity(opacity)
-        case .system: return Color.primary.opacity(opacity)
-        }
+        settings.bubbleTextColor(opacity)
     }
 }
 
@@ -512,28 +507,19 @@ private struct FocusSessionBubbleRow: View {
     }
 
     private func textColor(_ opacity: Double) -> Color {
-        switch settings.theme {
-        case .light:  return .black.opacity(opacity)
-        case .dark:   return .white.opacity(opacity)
-        case .system: return Color.primary.opacity(opacity)
-        }
+        settings.bubbleTextColor(opacity)
     }
 
     var body: some View {
-        switch focusClock.activeMode {
-        case .timer where focusClock.isTimerActive:
-            timerRow
-        case .stopwatch where focusClock.isStopwatchActive:
-            stopwatchRow
-        case .pomodoro where pomoCtrl.state.phase != .idle:
-            pomodoroRow
-        default:
+        VStack(alignment: .leading, spacing: chatStyle ? 4 : 5) {
+            if pomoCtrl.state.phase != .idle {
+                pomodoroRow
+            }
             if focusClock.isTimerActive {
                 timerRow
-            } else if focusClock.isStopwatchActive {
+            }
+            if focusClock.isStopwatchActive {
                 stopwatchRow
-            } else if pomoCtrl.state.phase != .idle {
-                pomodoroRow
             }
         }
     }
@@ -555,7 +541,7 @@ private struct FocusSessionBubbleRow: View {
         return HStack(alignment: .center, spacing: 5) {
             StateDot(color: dotColor, spins: !isPaused, style: settings.dotStyle)
             Image(systemName: pomoCtrl.state.phase.isBreak ? "cup.and.saucer.fill" : "brain.head.profile")
-                .font(.system(size: iconPt, weight: .semibold))
+                .font(.system(size: max(iconPt, 11), weight: .semibold))
                 .foregroundStyle(pomoCtrl.state.phase.isBreak ? Color(red: 0.25, green: 0.75, blue: 0.50) : Color(red: 0.35, green: 0.62, blue: 0.90))
             Text(actionText)
                 .font(.system(size: primaryPt, weight: .semibold))
@@ -579,19 +565,17 @@ private struct FocusSessionBubbleRow: View {
         let tState = focusClock.timerState
         let isPaused = (tState.state == .paused)
         let dotColor: Color = isPaused ? Color(red: 0.88, green: 0.62, blue: 0.28) : Color(red: 0.35, green: 0.65, blue: 0.85)
-        let displayTitle = (!tState.activeSubject.isEmpty && tState.activeSubject != "Focus Timer") ? tState.activeSubject : (isPaused ? "Paused" : "Timer")
+        let displayTitle = isPaused ? "Paused" : "Timer"
 
         return HStack(alignment: .center, spacing: 5) {
             StateDot(color: dotColor, spins: !isPaused, style: settings.dotStyle)
             Image(systemName: "timer")
-                .font(.system(size: iconPt, weight: .semibold))
+                .font(.system(size: max(iconPt, 11), weight: .semibold))
                 .foregroundStyle(Color(red: 0.35, green: 0.65, blue: 0.85))
             Text(displayTitle)
                 .font(.system(size: primaryPt, weight: .semibold))
                 .foregroundStyle(isPaused ? Color(red: 0.88, green: 0.62, blue: 0.28) : textColor(0.9))
                 .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: 88, alignment: .leading)
             Text(tState.formattedRemaining)
                 .font(.system(size: secondaryPt, weight: .semibold))
                 .foregroundStyle(textColor(0.65)).monospacedDigit().lineLimit(1)
@@ -610,19 +594,17 @@ private struct FocusSessionBubbleRow: View {
         let sState = focusClock.stopwatchState
         let isPaused = (sState.state == .paused)
         let dotColor: Color = isPaused ? Color(red: 0.88, green: 0.62, blue: 0.28) : Color(red: 0.35, green: 0.75, blue: 0.60)
-        let displayTitle = (!sState.activeSubject.isEmpty && sState.activeSubject != "Focus Stopwatch" && sState.activeSubject != "Stopwatch Session") ? sState.activeSubject : (isPaused ? "Paused" : "Stopwatch")
+        let displayTitle = isPaused ? "Paused" : "Stopwatch"
 
         return HStack(alignment: .center, spacing: 5) {
             StateDot(color: dotColor, spins: !isPaused, style: settings.dotStyle)
             Image(systemName: "stopwatch")
-                .font(.system(size: iconPt, weight: .semibold))
+                .font(.system(size: max(iconPt, 11), weight: .semibold))
                 .foregroundStyle(Color(red: 0.35, green: 0.75, blue: 0.60))
             Text(displayTitle)
                 .font(.system(size: primaryPt, weight: .semibold))
                 .foregroundStyle(isPaused ? Color(red: 0.88, green: 0.62, blue: 0.28) : textColor(0.9))
                 .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: 88, alignment: .leading)
             Text(sState.formattedElapsed)
                 .font(.system(size: secondaryPt, weight: .semibold))
                 .foregroundStyle(textColor(0.65)).monospacedDigit().lineLimit(1)
@@ -650,7 +632,7 @@ private struct FocusSessionBubbleRow: View {
                     .font(.system(size: 7.5, weight: .bold))
                     .foregroundStyle(musicCtrl.isPlaying ? Color(red: 0.38, green: 0.72, blue: 0.82) : textColor(0.65))
                     .frame(width: 16, height: 16)
-                    .background(Circle().fill(musicCtrl.isPlaying ? Color(red: 0.38, green: 0.72, blue: 0.82).opacity(0.18) : textColor(0.08)))
+                    .background(Circle().fill(musicCtrl.isPlaying ? Color(red: 0.38, green: 0.72, blue: 0.82).opacity(0.18) : settings.bubbleSubtleFill(0.08)))
             }
             .buttonStyle(.plain)
             .contextMenu {
@@ -669,7 +651,7 @@ private struct FocusSessionBubbleRow: View {
                         .foregroundStyle(textColor(0.72))
                         .padding(.horizontal, 3.5)
                         .frame(height: 16)
-                        .background(Capsule().fill(textColor(0.08)))
+                        .background(Capsule().fill(settings.bubbleSubtleFill(0.08)))
                 }
                 .buttonStyle(.plain)
                 .help("Add 5 minutes to countdown")
@@ -680,7 +662,7 @@ private struct FocusSessionBubbleRow: View {
                     .font(.system(size: 7.5, weight: .bold))
                     .foregroundStyle(textColor(0.75))
                     .frame(width: 16, height: 16)
-                    .background(Circle().fill(textColor(0.08)))
+                    .background(Circle().fill(settings.bubbleSubtleFill(0.08)))
             }
             .buttonStyle(.plain)
             .help(isPaused ? "Resume" : "Pause")
@@ -793,11 +775,7 @@ private struct BubbleCarousel: View {
     }
 
     private func dotColor(_ opacity: Double) -> Color {
-        switch settings.theme {
-        case .light:  return .black.opacity(opacity)
-        case .dark:   return .white.opacity(opacity)
-        case .system: return Color.primary.opacity(opacity)
-        }
+        settings.bubbleTextColor(opacity)
     }
 
     private var dotActive: Color { dotColor(0.7) }
@@ -1207,7 +1185,7 @@ private struct AgentRow: View {
                         .padding(.vertical, 1)
                         .background(
                             Capsule()
-                                .fill(textColor(0.08))
+                                .fill(settings.bubbleSubtleFill(0.08))
                         )
                 }
             }
@@ -1276,7 +1254,7 @@ private struct AgentRow: View {
                     .padding(.vertical, 1)
                     .background(
                         Capsule()
-                            .fill(textColor(0.08))
+                            .fill(settings.bubbleSubtleFill(0.08))
                     )
                     .layoutPriority(-1)
             }
@@ -1307,11 +1285,7 @@ private struct AgentRow: View {
     }
 
     private func textColor(_ opacity: Double) -> Color {
-        switch settings.theme {
-        case .light:  return .black.opacity(opacity)
-        case .dark:   return .white.opacity(opacity)
-        case .system: return Color.primary.opacity(opacity)
-        }
+        settings.bubbleTextColor(opacity)
     }
 
     private var projectName: String {
@@ -1424,11 +1398,7 @@ private struct PendingApprovalRow: View {
     }
 
     private func textColor(_ opacity: Double) -> Color {
-        switch settings.theme {
-        case .light:  return .black.opacity(opacity)
-        case .dark:   return .white.opacity(opacity)
-        case .system: return Color.primary.opacity(opacity)
-        }
+        settings.bubbleTextColor(opacity)
     }
 }
 
@@ -1488,35 +1458,19 @@ struct ChatBubble: View {
     @Environment(\.bubbleTailOffset) private var tailOffset
 
     private var fill: Color {
-        switch settings.theme {
-        case .light:  return Color.white.opacity(settings.opacity)
-        case .dark:   return Color(nsColor: .windowBackgroundColor).opacity(settings.opacity)
-        case .system: return Color(nsColor: .textBackgroundColor).opacity(settings.opacity)
-        }
+        settings.bubbleFill
     }
 
     private var textColor: Color {
-        switch settings.theme {
-        case .light:  return .black.opacity(0.85)
-        case .dark:   return .white.opacity(0.85)
-        case .system: return Color.primary.opacity(0.85)
-        }
+        settings.bubbleTextColor(0.85)
     }
 
     private var dimmedTextColor: Color {
-        switch settings.theme {
-        case .light:  return .black.opacity(0.45)
-        case .dark:   return .white.opacity(0.45)
-        case .system: return Color.primary.opacity(0.45)
-        }
+        settings.bubbleTextColor(0.45)
     }
 
     private var borderColor: Color {
-        switch settings.theme {
-        case .light:  return .black.opacity(0.06)
-        case .dark:   return .white.opacity(0.12)
-        case .system: return Color.primary.opacity(0.08)
-        }
+        settings.bubbleBorderColor
     }
 
     var body: some View {
@@ -1580,19 +1534,11 @@ struct PetMusicBubble: View {
     @Environment(\.bubbleTailOffset) private var tailOffset
 
     private var fill: Color {
-        switch settings.theme {
-        case .light:  return Color.white.opacity(settings.opacity)
-        case .dark:   return Color(nsColor: .windowBackgroundColor).opacity(settings.opacity)
-        case .system: return Color(nsColor: .textBackgroundColor).opacity(settings.opacity)
-        }
+        settings.bubbleFill
     }
 
     private var stroke: Color {
-        switch settings.theme {
-        case .light:  return .black.opacity(0.08)
-        case .dark:   return .white.opacity(0.15)
-        case .system: return Color.primary.opacity(0.1)
-        }
+        settings.bubbleBorderColor
     }
 
     var body: some View {
@@ -1604,11 +1550,11 @@ struct PetMusicBubble: View {
 
                 Text("Playing:")
                     .font(.system(size: 9.5, weight: .medium))
-                    .foregroundStyle(Color.primary.opacity(0.50))
+                    .foregroundStyle(settings.bubbleTextColor(0.50))
 
                 Text(station.title)
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Color.primary.opacity(0.88))
+                    .foregroundStyle(settings.bubbleTextColor(0.88))
                     .lineLimit(1)
 
                 Button {
@@ -1616,9 +1562,9 @@ struct PetMusicBubble: View {
                 } label: {
                     Image(systemName: "forward.fill")
                         .font(.system(size: 6.5, weight: .bold))
-                        .foregroundStyle(Color.primary.opacity(0.60))
+                        .foregroundStyle(settings.bubbleTextColor(0.60))
                         .frame(width: 15, height: 15)
-                        .background(Circle().fill(Color.primary.opacity(0.07)))
+                        .background(Circle().fill(settings.bubbleSubtleFill(0.08)))
                 }
                 .buttonStyle(.plain)
                 .help("Next Station: \(musicCtrl.currentStation.title)")
@@ -1665,35 +1611,19 @@ struct PetQuoteBubble: View {
     @Environment(\.bubbleTailOffset) private var tailOffset
 
     private var fill: Color {
-        switch settings.theme {
-        case .light:  return Color.white.opacity(settings.opacity)
-        case .dark:   return Color(nsColor: .windowBackgroundColor).opacity(settings.opacity)
-        case .system: return Color(nsColor: .textBackgroundColor).opacity(settings.opacity)
-        }
+        settings.bubbleFill
     }
 
     private var textColor: Color {
-        switch settings.theme {
-        case .light:  return .black.opacity(0.92)
-        case .dark:   return .white.opacity(0.95)
-        case .system: return Color.primary.opacity(0.95)
-        }
+        settings.bubbleTextColor(0.92)
     }
 
     private var dimmedTextColor: Color {
-        switch settings.theme {
-        case .light:  return .black.opacity(0.65)
-        case .dark:   return .white.opacity(0.65)
-        case .system: return Color.primary.opacity(0.65)
-        }
+        settings.bubbleTextColor(0.65)
     }
 
     private var borderColor: Color {
-        switch settings.theme {
-        case .light:  return .black.opacity(0.08)
-        case .dark:   return .white.opacity(0.15)
-        case .system: return Color.primary.opacity(0.1)
-        }
+        settings.bubbleBorderColor
     }
 
     var body: some View {
@@ -1815,10 +1745,23 @@ struct PetQuoteBubble: View {
 struct PetReminderBubble: View {
     let due: DueReminder
     @ObservedObject private var reminderCtrl = ReminderController.shared
+    @ObservedObject private var settings = BubbleSettings.shared
     @Environment(\.bubbleTailOffset) private var tailOffset
 
     private var fill: Color {
-        Color(red: 0.10, green: 0.11, blue: 0.16).opacity(0.96)
+        settings.bubbleFill
+    }
+
+    private var borderColor: Color {
+        settings.bubbleBorderColor
+    }
+
+    private var textColor: Color {
+        settings.bubbleTextColor(0.92)
+    }
+
+    private var dimmedTextColor: Color {
+        settings.bubbleTextColor(0.65)
     }
 
     var body: some View {
@@ -1830,19 +1773,19 @@ struct PetReminderBubble: View {
                         .foregroundStyle(Color.orange)
                     Text(due.title)
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(textColor)
                     Spacer(minLength: 4)
                     Text("DUE")
                         .font(.system(size: 8, weight: .black))
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
-                        .background(RoundedRectangle(cornerRadius: 3).fill(Color.orange.opacity(0.35)))
+                        .background(RoundedRectangle(cornerRadius: 3).fill(Color.orange.opacity(settings.isDark ? 0.35 : 0.20)))
                         .foregroundStyle(Color.orange)
                 }
 
                 Text(due.message)
                     .font(.system(size: 10))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(dimmedTextColor)
                     .lineLimit(2)
 
                 HStack(spacing: 5) {
@@ -1875,8 +1818,8 @@ struct PetReminderBubble: View {
                         .font(.system(size: 9, weight: .medium))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
-                        .background(Capsule().fill(Color.white.opacity(0.18)))
-                        .foregroundStyle(.white)
+                        .background(Capsule().fill(settings.bubbleSubtleFill(0.12)))
+                        .foregroundStyle(textColor)
                     }
                     .buttonStyle(.plain)
 
@@ -1887,8 +1830,8 @@ struct PetReminderBubble: View {
                             .font(.system(size: 8, weight: .bold))
                             .padding(.horizontal, 5)
                             .padding(.vertical, 3)
-                            .background(Capsule().fill(Color.white.opacity(0.12)))
-                            .foregroundStyle(.white.opacity(0.6))
+                            .background(Capsule().fill(settings.bubbleSubtleFill(0.10)))
+                            .foregroundStyle(dimmedTextColor)
                     }
                     .buttonStyle(.plain)
                 }
@@ -1896,10 +1839,10 @@ struct PetReminderBubble: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(fill))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.orange.opacity(0.5), lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(fill))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(borderColor, lineWidth: 1))
             .compositingGroup()
-            .shadow(color: .black.opacity(0.28), radius: 6, y: 3)
+            .shadow(color: .black.opacity(0.18), radius: 5, y: 2)
 
             Triangle()
                 .fill(fill)
@@ -1998,7 +1941,11 @@ struct PetDayProgressBubble: View {
     @Environment(\.bubbleTailOffset) private var tailOffset
 
     private var fill: Color {
-        Color(red: 0.10, green: 0.11, blue: 0.16).opacity(0.96)
+        settings.bubbleFill
+    }
+
+    private var borderColor: Color {
+        settings.bubbleBorderColor
     }
 
     var body: some View {
@@ -2012,7 +1959,7 @@ struct PetDayProgressBubble: View {
 
                     Text(snapshot.currentTimeFormatted)
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(settings.bubbleTextColor(0.92))
 
                     Text(snapshot.currentSection.title.uppercased())
                         .font(.system(size: 7.5, weight: .heavy))
@@ -2025,14 +1972,14 @@ struct PetDayProgressBubble: View {
 
                     Text("\(Int(snapshot.percentPassed * 100))% DAY")
                         .font(.system(size: 8, weight: .heavy))
-                        .foregroundStyle(.white.opacity(0.55))
+                        .foregroundStyle(settings.bubbleTextColor(0.55))
 
                     Button {
                         dayProgressCtrl.dismiss()
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.55))
+                            .foregroundStyle(settings.bubbleTextColor(0.55))
                     }
                     .buttonStyle(.plain)
                     .help("Dismiss")
@@ -2042,13 +1989,13 @@ struct PetDayProgressBubble: View {
                 HStack(spacing: 4) {
                     Text("\(snapshot.hoursPassedFormatted) passed")
                         .font(.system(size: 9.5, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.85))
+                        .foregroundStyle(settings.bubbleTextColor(0.85))
                     Text("·")
                         .font(.system(size: 9.5))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(settings.bubbleTextColor(0.4))
                     Text("\(snapshot.remainingFormatted) left")
                         .font(.system(size: 9.5, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.65))
+                        .foregroundStyle(settings.bubbleTextColor(0.65))
 
                     Spacer()
 
@@ -2072,14 +2019,14 @@ struct PetDayProgressBubble: View {
                 HStack {
                     Text("0h")
                         .font(.system(size: 7.5))
-                        .foregroundStyle(.white.opacity(0.3))
+                        .foregroundStyle(settings.bubbleTextColor(0.35))
                     Spacer()
                     HStack(spacing: 2) {
                         Image(systemName: "sun.max.fill").font(.system(size: 7))
                         Text(snapshot.wakeTimeFormatted)
                     }
                     .font(.system(size: 7.5))
-                    .foregroundStyle(.white.opacity(0.45))
+                    .foregroundStyle(settings.bubbleTextColor(0.50))
                     Spacer()
                     HStack(spacing: 2) {
                         Image(systemName: "moon.fill").font(.system(size: 7))
@@ -2090,7 +2037,7 @@ struct PetDayProgressBubble: View {
                     Spacer()
                     Text("24h")
                         .font(.system(size: 7.5))
-                        .foregroundStyle(.white.opacity(0.3))
+                        .foregroundStyle(settings.bubbleTextColor(0.35))
                 }
             }
             .padding(.horizontal, 10)
@@ -2098,7 +2045,7 @@ struct PetDayProgressBubble: View {
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(fill))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(snapshot.isPastSleepTime ? Color(red: 0.5, green: 0.4, blue: 0.9).opacity(0.5) : Color.white.opacity(0.12), lineWidth: 1)
+                    .strokeBorder(snapshot.isPastSleepTime ? Color(red: 0.5, green: 0.4, blue: 0.9).opacity(0.5) : borderColor, lineWidth: 1)
             )
             .compositingGroup()
             .shadow(color: .black.opacity(0.25), radius: 6, y: 3)

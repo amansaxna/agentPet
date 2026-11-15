@@ -414,9 +414,9 @@ struct PetStatsView: View {
 
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 5) {
-                Circle()
-                    .fill(isActive ? (isPaused ? Color.orange : Color.cyan) : Color.gray)
-                    .frame(width: 7, height: 7)
+                Image(systemName: "timer")
+                    .font(.system(size: 9.5, weight: .bold))
+                    .foregroundStyle(isActive ? (isPaused ? Color.orange : Color.cyan) : Color.gray)
                 Text(isActive ? "COUNTDOWN TIMER" : "TIMER PRESETS")
                     .font(.system(size: 9, weight: .bold)).tracking(0.8)
                     .foregroundStyle(isActive ? Color.cyan : .white.opacity(0.45))
@@ -525,9 +525,9 @@ struct PetStatsView: View {
 
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 5) {
-                Circle()
-                    .fill(isActive ? (isPaused ? Color.orange : Color.green) : Color.gray)
-                    .frame(width: 7, height: 7)
+                Image(systemName: "stopwatch")
+                    .font(.system(size: 9.5, weight: .bold))
+                    .foregroundStyle(isActive ? (isPaused ? Color.orange : Color.green) : Color.gray)
                 Text(isActive ? "STOPWATCH RUNNING" : "STOPWATCH")
                     .font(.system(size: 9, weight: .bold)).tracking(0.8)
                     .foregroundStyle(isActive ? Color.green : .white.opacity(0.45))

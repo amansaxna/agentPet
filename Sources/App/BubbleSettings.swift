@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import AppKit
 import AgentPetCore
 
 // MARK: - Token types
@@ -403,5 +404,64 @@ final class BubbleSettings: ObservableObject {
             return .allSessions
         }
         return .byKind
+    }
+}
+
+// MARK: - Bubble Appearance and Theme Resolvers
+
+extension BubbleSettings {
+    /// Evaluates whether the bubble should currently render in dark mode.
+    /// Honors the explicit `.dark` or `.light` user setting; when `.system`,
+    /// resolves against macOS system appearance.
+    var isDark: Bool {
+        switch theme {
+        case .dark:
+            return true
+        case .light:
+            return false
+        case .system:
+            if let appearance = NSApp?.effectiveAppearance ?? NSApplication.shared.effectiveAppearance as NSAppearance? {
+                return appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            }
+            return false
+        }
+    }
+
+    /// Primary background fill for desktop notifications and bubbles.
+    /// Uses dedicated dark slate for dark theme (so it never collapses to light gray in borderless panels),
+    /// and clean frosted white for light theme.
+    var bubbleFill: Color {
+        if isDark {
+            return Color(red: 0.12, green: 0.13, blue: 0.17).opacity(opacity)
+        } else {
+            return Color.white.opacity(opacity)
+        }
+    }
+
+    /// Border stroke outline for bubbles.
+    var bubbleBorderColor: Color {
+        if isDark {
+            return Color.white.opacity(0.12)
+        } else {
+            return Color.black.opacity(0.08)
+        }
+    }
+
+    /// Standard typography color for bubbles and rows.
+    func bubbleTextColor(_ alpha: Double = 1.0) -> Color {
+        if isDark {
+            return Color.white.opacity(alpha)
+        } else {
+            return Color.black.opacity(alpha)
+        }
+    }
+
+    /// Subtle pill / control background fill for interactive buttons inside bubbles.
+    func bubbleSubtleFill(_ alpha: Double = 0.08) -> Color {
+        if isDark {
+            return Color.white.opacity(alpha)
+        } else {
+            return Color.black.opacity(alpha)
+        }
     }
 }
