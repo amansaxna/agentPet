@@ -194,20 +194,22 @@ struct FloatingPetView: View {
                 .overlay(alignment: .top) {
                     if !model.petReactionLine.isEmpty {
                         Text(model.petReactionLine)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.primary.opacity(0.85))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .foregroundStyle(bubbleSettings.bubbleTextColor(0.92))
+                            .lineLimit(1)
+                            .fixedSize()
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4.5)
                             .background(
                                 Capsule()
-                                    .fill(.regularMaterial)
+                                    .fill(bubbleSettings.bubbleFill)
                             )
                             .overlay(
                                 Capsule()
-                                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                                    .strokeBorder(bubbleSettings.bubbleBorderColor, lineWidth: 1)
                             )
-                            .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
-                            .offset(y: -16)
+                            .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
+                            .offset(y: -14)
                             .transition(.asymmetric(
                                 insertion: .scale(scale: 0.5, anchor: .bottom).combined(with: .opacity),
                                 removal: .opacity
