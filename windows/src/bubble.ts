@@ -471,21 +471,7 @@ export class BubbleRenderer {
       const groups = groupSessions(sessions, cfg);
       const sessWrap = document.createElement("div");
       sessWrap.className = "bubble-sessions-wrap";
-      for (const g of groups.slice(0, cfg.maxSessions)) {
-        const brow = document.createElement("div");
-        brow.className = `brow ${g.session.state}`;
-        const msg = messageFor(g.session);
-        const elapsed = elapsedString(g.session.stateSince);
-        brow.innerHTML = `
-          <div class="sdot ${cfg.dotStyle} ${g.session.state === "working" ? "spin" : ""}"></div>
-          <span class="icon-slot">${uiIcon(g.session.agent) || "🤖"}</span>
-          <span class="rtitle">${g.session.agent}</span>
-          <span class="rsep">${cfg.separator}</span>
-          <span class="amsg">${msg}</span>
-          <span class="clock">${elapsed}</span>
-        `;
-        sessWrap.appendChild(brow);
-      }
+      this.syncRows(groups.slice(0, cfg.maxSessions), cfg, sessWrap);
       container.appendChild(sessWrap);
     }
 
