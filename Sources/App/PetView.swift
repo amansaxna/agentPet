@@ -581,7 +581,7 @@ private struct FocusSessionBubbleRow: View {
                 .foregroundStyle(textColor(0.65)).monospacedDigit().lineLimit(1)
             actionButtons(
                 isPaused: isPaused,
-                onAddMinutes: { focusClock.addTimerMinutes(5) },
+                onAddMinutes: nil,
                 onToggle: { isPaused ? focusClock.resumeTimer() : focusClock.pauseTimer() },
                 onStop: { focusClock.stopTimer() }
             )
