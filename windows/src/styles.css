@@ -2241,6 +2241,11 @@ body.pop.stats .sc-card { height: 100%; }
   flex-direction: column;
   gap: 4px;
 }
+.bubble-clocks-host {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
 .bubble-sessions-wrap {
   display: flex;
   flex-direction: column;

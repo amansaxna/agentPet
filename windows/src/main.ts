@@ -112,6 +112,10 @@ function applyPet() {
 }
 applyPet();
 
+// Ensure main pet window owns host services (Focus Clocks & Focus Music singleton)
+focusClock.startHost();
+focusMusic.startHost();
+
 // Per-event enable + custom file, like the macOS SoundSettings. The default
 // sound is a real system sound on Windows (Rust `play_sound`, the macOS
 // Glass/Submarine equivalent); the synthesized chime is only the Linux fallback.
@@ -480,8 +484,11 @@ setTimeout(() => { void pollLimits(); }, IS_MAIN ? 5_000 : 15_000);
 setInterval(() => { void pollLimits(); }, limits.POLL_MS);
 // Carousel advance / fold clicks request a prompt repaint.
 setInterval(() => { if (bubble.dirty) { bubble.dirty = false; render(); } }, 120);
-// Live elapsed clocks tick every second.
-setInterval(() => bubble.tickClocks(), 1000);
+// Live elapsed clocks and pomodoro tick every second.
+setInterval(() => {
+  pomodoro.tickPomodoro();
+  bubble.tickClocks();
+}, 1000);
 
 // Pull the bubble down over the canvas's empty headroom so it sits right
 // above the pet's head (the sprite rarely fills the whole canvas height).

@@ -45,8 +45,8 @@ export const LAYOUT_PRESETS: Record<string, TokenItem[]> = {
     { token: "separator", isVisible: true },
     { token: "message", isVisible: true },
     { token: "title", isVisible: false },
-    { token: "stateLabel", isVisible: false },
-    { token: "elapsed", isVisible: false },
+    { token: "stateLabel", isVisible: true },
+    { token: "elapsed", isVisible: true },
   ],
   standard: [
     { token: "dot", isVisible: true },
@@ -55,8 +55,8 @@ export const LAYOUT_PRESETS: Record<string, TokenItem[]> = {
     { token: "project", isVisible: true },
     { token: "separator", isVisible: true },
     { token: "message", isVisible: true },
-    { token: "stateLabel", isVisible: false },
-    { token: "elapsed", isVisible: false },
+    { token: "stateLabel", isVisible: true },
+    { token: "elapsed", isVisible: true },
   ],
   detailed: [
     { token: "dot", isVisible: true },
@@ -92,6 +92,21 @@ export function readBubbleConfig(): BubbleConfig {
       if (Array.isArray(parsed) && parsed.length) tokens = parsed;
     }
   } catch {}
+
+  // Parity with macOS: always ensure elapsed and stateLabel are visible by default
+  if (!tokens.some((t) => t.token === "elapsed")) {
+    tokens.push({ token: "elapsed", isVisible: true });
+  } else {
+    const elToken = tokens.find((t) => t.token === "elapsed");
+    if (elToken && !ls.getItem("ap_bub_tokens_explicit")) elToken.isVisible = true;
+  }
+  if (!tokens.some((t) => t.token === "stateLabel")) {
+    tokens.push({ token: "stateLabel", isVisible: true });
+  } else {
+    const stToken = tokens.find((t) => t.token === "stateLabel");
+    if (stToken && !ls.getItem("ap_bub_tokens_explicit")) stToken.isVisible = true;
+  }
+
   let hidden: string[] = [];
   try { hidden = JSON.parse(ls.getItem("ap_bub_hidden") || "[]"); } catch {}
   return {
@@ -405,15 +420,22 @@ export class BubbleRenderer {
     clocks: FocusClockBubbleItem[],
     musicPill?: { station: { title: string; icon?: string }; onStop: () => void; onNext?: () => void }
   ) {
-    this.clear();
-
-    const container = document.createElement("div");
-    container.className = "bubble-composite-wrap";
+    let container = this.root.querySelector<HTMLElement>(".bubble-composite-wrap");
+    if (!container || this.root.querySelector(".pet-reminder-card, .pet-quote-bubble, .pet-dayprog-bubble, .single-line")) {
+      this.clear();
+      container = document.createElement("div");
+      container.className = "bubble-composite-wrap";
+      this.root.appendChild(container);
+    }
 
     // 1. Music pill on top if standalone music active
+    let mRow = container.querySelector<HTMLElement>(".music-capsule-row");
     if (musicPill) {
-      const mRow = document.createElement("div");
-      mRow.className = "music-capsule-row";
+      if (!mRow) {
+        mRow = document.createElement("div");
+        mRow.className = "music-capsule-row";
+        container.insertBefore(mRow, container.firstChild);
+      }
       mRow.innerHTML = `
         <span class="m-headphone-icon">🎧</span>
         <span class="m-title">${musicPill.station.title}</span>
@@ -430,55 +452,80 @@ export class BubbleRenderer {
         e.stopPropagation();
         musicPill.onStop();
       });
-      container.appendChild(mRow);
+    } else if (mRow) {
+      mRow.remove();
+      mRow = null;
     }
 
     // 2. Focus Clocks rows (Pomodoro, Countdown Timer, Stopwatch)
-    for (const clock of clocks) {
-      const row = document.createElement("div");
-      row.className = "pet-pomodoro-pill focus-clock-row";
-      row.innerHTML = `
-        <div class="pomo-dot" style="background:${clock.dotColor}"></div>
-        <span class="pomo-icon">${clock.icon}</span>
-        <span class="pomo-phase">${clock.phaseLabel}</span>
-        <span class="pomo-time">${clock.timeStr}</span>
-        <div class="pomo-btns">
-          ${clock.onMusicToggle ? `<button class="pomo-music" title="${clock.isMusicPlaying ? "Stop Focus Music" : "Play Focus Music"}">${clock.isMusicPlaying ? "🔊" : "🎵"}</button>` : ""}
-          <button class="pomo-toggle" title="${clock.isPaused ? "Resume" : "Pause"}">${clock.isPaused ? "▶" : "⏸"}</button>
-          <button class="pomo-stop" title="Stop">⏹</button>
-        </div>
-      `;
-      if (clock.onMusicToggle) {
-        row.querySelector(".pomo-music")?.addEventListener("click", (e) => {
-          e.stopPropagation();
-          clock.onMusicToggle?.();
-        });
+    let clocksHost = container.querySelector<HTMLElement>(".bubble-clocks-host");
+    if (!clocksHost) {
+      clocksHost = document.createElement("div");
+      clocksHost.className = "bubble-clocks-host";
+      if (mRow && mRow.nextSibling) {
+        container.insertBefore(clocksHost, mRow.nextSibling);
+      } else if (!mRow && container.firstChild) {
+        container.insertBefore(clocksHost, container.firstChild);
+      } else {
+        container.appendChild(clocksHost);
       }
-      row.querySelector(".pomo-toggle")?.addEventListener("click", (e) => {
-        e.stopPropagation();
-        clock.onToggle();
-      });
-      row.querySelector(".pomo-stop")?.addEventListener("click", (e) => {
-        e.stopPropagation();
-        clock.onStop();
-      });
-      container.appendChild(row);
+    }
+
+    if (clocks.length === 0) {
+      clocksHost.textContent = "";
+    } else {
+      clocksHost.textContent = "";
+      for (const clock of clocks) {
+        const row = document.createElement("div");
+        row.className = "pet-pomodoro-pill focus-clock-row";
+        row.innerHTML = `
+          <div class="pomo-dot" style="background:${clock.dotColor}"></div>
+          <span class="pomo-icon">${clock.icon}</span>
+          <span class="pomo-phase">${clock.phaseLabel}</span>
+          <span class="pomo-time">${clock.timeStr}</span>
+          <div class="pomo-btns">
+            ${clock.onMusicToggle ? `<button class="pomo-music" title="${clock.isMusicPlaying ? "Stop Focus Music" : "Play Focus Music"}">${clock.isMusicPlaying ? "🔊" : "🎵"}</button>` : ""}
+            <button class="pomo-toggle" title="${clock.isPaused ? "Resume" : "Pause"}">${clock.isPaused ? "▶" : "⏸"}</button>
+            <button class="pomo-stop" title="Stop">⏹</button>
+          </div>
+        `;
+        if (clock.onMusicToggle) {
+          row.querySelector(".pomo-music")?.addEventListener("click", (e) => {
+            e.stopPropagation();
+            clock.onMusicToggle?.();
+          });
+        }
+        row.querySelector(".pomo-toggle")?.addEventListener("click", (e) => {
+          e.stopPropagation();
+          clock.onToggle();
+        });
+        row.querySelector(".pomo-stop")?.addEventListener("click", (e) => {
+          e.stopPropagation();
+          clock.onStop();
+        });
+        clocksHost.appendChild(row);
+      }
     }
 
     // 3. Agent sessions rows
+    let sessWrap = container.querySelector<HTMLElement>(".bubble-sessions-wrap");
     if (sessions.length) {
+      if (!sessWrap) {
+        sessWrap = document.createElement("div");
+        sessWrap.className = "bubble-sessions-wrap";
+        container.appendChild(sessWrap);
+      }
       const cfg = readBubbleConfig();
       const groups = groupSessions(sessions, cfg);
-      const sessWrap = document.createElement("div");
-      sessWrap.className = "bubble-sessions-wrap";
       this.syncRows(groups.slice(0, cfg.maxSessions), cfg, sessWrap);
-      container.appendChild(sessWrap);
+    } else if (sessWrap) {
+      sessWrap.remove();
     }
 
-    this.root.appendChild(container);
     const totalRows = (musicPill ? 1 : 0) + clocks.length + sessions.length;
     this.root.classList.toggle("capsule", totalRows <= 1);
     this.root.hidden = false;
+    this.tickClocks();
   }
 
   renderPomodoro(

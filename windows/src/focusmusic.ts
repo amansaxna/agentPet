@@ -70,15 +70,25 @@ export const STATIONS: FocusMusicStation[] = [
   },
 ];
 
+function isPetHostWindow(): boolean {
+  if (typeof window === "undefined" || typeof document === "undefined") return false;
+  return !!document.getElementById("pet") ||
+         !!document.getElementById("pet-root") ||
+         location.pathname.endsWith("index.html") ||
+         location.pathname === "/" ||
+         location.pathname === "";
+}
+
 class FocusMusicService {
   private audio: HTMLAudioElement | null = null;
   private currentStationId = "groove_salad";
   private isPlaying = false;
   private volume = 0.6;
   private isHost = false;
+  private isHostInitialized = false;
 
   constructor() {
-    this.isHost = typeof document !== "undefined" && !!document.getElementById("pet-canvas");
+    this.isHost = isPetHostWindow();
 
     try {
       const saved = localStorage.getItem("ap_focus_music_station");
@@ -100,7 +110,14 @@ class FocusMusicService {
     }
   }
 
+  public startHost() {
+    this.isHost = true;
+    this.initHost();
+  }
+
   private initHost() {
+    if (this.isHostInitialized) return;
+    this.isHostInitialized = true;
     try {
       listen<{ action: string; stationId?: string; volume?: number }>("ap-music-cmd", (event) => {
         const payload = event.payload;

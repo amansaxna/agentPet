@@ -98,6 +98,15 @@ export function playClockSound(type: "start" | "done" | "lap" | "tick") {
   } catch {}
 }
 
+function isPetHostWindow(): boolean {
+  if (typeof window === "undefined" || typeof document === "undefined") return false;
+  return !!document.getElementById("pet") ||
+         !!document.getElementById("pet-root") ||
+         location.pathname.endsWith("index.html") ||
+         location.pathname === "/" ||
+         location.pathname === "";
+}
+
 class FocusClockService {
   private timer: CountdownTimerState = {
     state: "idle",
@@ -118,9 +127,10 @@ class FocusClockService {
   private activeMode: FocusMode = "pomodoro";
   private isHost = false;
   private tickInterval: number | null = null;
+  private isHostInitialized = false;
 
   constructor() {
-    this.isHost = typeof document !== "undefined" && !!document.getElementById("pet-canvas");
+    this.isHost = isPetHostWindow();
     this.loadPersisted();
 
     if (this.isHost) {
@@ -128,6 +138,11 @@ class FocusClockService {
     } else {
       this.initClient();
     }
+  }
+
+  public startHost() {
+    this.isHost = true;
+    this.initHost();
   }
 
   private loadPersisted() {
@@ -156,6 +171,9 @@ class FocusClockService {
   }
 
   private initHost() {
+    if (this.isHostInitialized) return;
+    this.isHostInitialized = true;
+
     try {
       listen<{ action: string; [key: string]: unknown }>("ap-focusclock-cmd", (event) => {
         const payload = event.payload;
@@ -236,9 +254,12 @@ class FocusClockService {
     let changed = false;
     const now = Date.now();
 
+    // Reload persisted state
+    this.loadPersisted();
+
     // Timer tick
     if (this.timer.state === "running") {
-      const delta = this.timer.lastTick ? Math.min(60, (now - this.timer.lastTick) / 1000) : 1;
+      const delta = this.timer.lastTick ? Math.min(10, Math.max(0.5, (now - this.timer.lastTick) / 1000)) : 1;
       this.timer.lastTick = now;
       this.timer.secondsRemaining = Math.max(0, this.timer.secondsRemaining - delta);
       changed = true;
@@ -254,7 +275,7 @@ class FocusClockService {
 
     // Stopwatch tick
     if (this.stopwatch.state === "running") {
-      const delta = this.stopwatch.lastTick ? Math.min(60, (now - this.stopwatch.lastTick) / 1000) : 1;
+      const delta = this.stopwatch.lastTick ? Math.min(10, Math.max(0.5, (now - this.stopwatch.lastTick) / 1000)) : 1;
       this.stopwatch.lastTick = now;
       this.stopwatch.elapsedSeconds += delta;
       changed = true;
@@ -313,14 +334,17 @@ class FocusClockService {
   }
 
   getTimerState(): CountdownTimerState {
+    this.loadPersisted();
     return { ...this.timer };
   }
 
   getStopwatchState(): StopwatchState {
+    this.loadPersisted();
     return { ...this.stopwatch };
   }
 
   getActiveMode(): FocusMode {
+    this.loadPersisted();
     return this.activeMode;
   }
 
@@ -329,16 +353,17 @@ class FocusClockService {
     this.persist();
     if (!this.isHost) {
       emit("ap-focusclock-cmd", { action: "set-mode", mode }).catch(() => {});
-    } else {
-      this.broadcastState();
     }
+    this.broadcastState();
   }
 
   isTimerActive(): boolean {
+    this.loadPersisted();
     return this.timer.state === "running" || this.timer.state === "paused";
   }
 
   isStopwatchActive(): boolean {
+    this.loadPersisted();
     return this.stopwatch.state === "running" || this.stopwatch.state === "paused";
   }
 
@@ -349,11 +374,10 @@ class FocusClockService {
   // --- Timer Actions ---
 
   startTimer(minutes = 15, subject?: string) {
+    this.startTimerInternal(minutes, subject);
     if (!this.isHost) {
       emit("ap-focusclock-cmd", { action: "start-timer", minutes, subject }).catch(() => {});
-      return;
     }
-    this.startTimerInternal(minutes, subject);
   }
 
   private startTimerInternal(minutes = 15, subject?: string) {
@@ -374,11 +398,10 @@ class FocusClockService {
   }
 
   pauseTimer() {
+    this.pauseTimerInternal();
     if (!this.isHost) {
       emit("ap-focusclock-cmd", { action: "pause-timer" }).catch(() => {});
-      return;
     }
-    this.pauseTimerInternal();
   }
 
   private pauseTimerInternal() {
@@ -390,11 +413,10 @@ class FocusClockService {
   }
 
   resumeTimer() {
+    this.resumeTimerInternal();
     if (!this.isHost) {
       emit("ap-focusclock-cmd", { action: "resume-timer" }).catch(() => {});
-      return;
     }
-    this.resumeTimerInternal();
   }
 
   private resumeTimerInternal() {
@@ -406,11 +428,10 @@ class FocusClockService {
   }
 
   addTimerMinutes(minutes = 5) {
+    this.addTimerMinutesInternal(minutes);
     if (!this.isHost) {
       emit("ap-focusclock-cmd", { action: "add-timer-minutes", minutes }).catch(() => {});
-      return;
     }
-    this.addTimerMinutesInternal(minutes);
   }
 
   private addTimerMinutesInternal(minutes = 5) {
@@ -422,11 +443,10 @@ class FocusClockService {
   }
 
   stopTimer() {
+    this.stopTimerInternal();
     if (!this.isHost) {
       emit("ap-focusclock-cmd", { action: "stop-timer" }).catch(() => {});
-      return;
     }
-    this.stopTimerInternal();
   }
 
   private stopTimerInternal() {
@@ -451,11 +471,10 @@ class FocusClockService {
   }
 
   resetTimer() {
+    this.resetTimerInternal();
     if (!this.isHost) {
       emit("ap-focusclock-cmd", { action: "reset-timer" }).catch(() => {});
-      return;
     }
-    this.resetTimerInternal();
   }
 
   private resetTimerInternal() {
@@ -473,11 +492,10 @@ class FocusClockService {
   // --- Stopwatch Actions ---
 
   startStopwatch(subject?: string) {
+    this.startStopwatchInternal(subject);
     if (!this.isHost) {
       emit("ap-focusclock-cmd", { action: "start-stopwatch", subject }).catch(() => {});
-      return;
     }
-    this.startStopwatchInternal(subject);
   }
 
   private startStopwatchInternal(subject?: string) {
@@ -497,11 +515,10 @@ class FocusClockService {
   }
 
   pauseStopwatch() {
+    this.pauseStopwatchInternal();
     if (!this.isHost) {
       emit("ap-focusclock-cmd", { action: "pause-stopwatch" }).catch(() => {});
-      return;
     }
-    this.pauseStopwatchInternal();
   }
 
   private pauseStopwatchInternal() {
@@ -513,11 +530,10 @@ class FocusClockService {
   }
 
   resumeStopwatch() {
+    this.resumeStopwatchInternal();
     if (!this.isHost) {
       emit("ap-focusclock-cmd", { action: "resume-stopwatch" }).catch(() => {});
-      return;
     }
-    this.resumeStopwatchInternal();
   }
 
   private resumeStopwatchInternal() {
@@ -529,11 +545,10 @@ class FocusClockService {
   }
 
   lapStopwatch() {
+    this.lapStopwatchInternal();
     if (!this.isHost) {
       emit("ap-focusclock-cmd", { action: "lap-stopwatch" }).catch(() => {});
-      return;
     }
-    this.lapStopwatchInternal();
   }
 
   private lapStopwatchInternal() {
@@ -545,11 +560,10 @@ class FocusClockService {
   }
 
   stopStopwatch() {
+    this.stopStopwatchInternal();
     if (!this.isHost) {
       emit("ap-focusclock-cmd", { action: "stop-stopwatch" }).catch(() => {});
-      return;
     }
-    this.stopStopwatchInternal();
   }
 
   private stopStopwatchInternal() {
@@ -574,11 +588,10 @@ class FocusClockService {
   }
 
   resetStopwatch() {
+    this.resetStopwatchInternal();
     if (!this.isHost) {
       emit("ap-focusclock-cmd", { action: "reset-stopwatch" }).catch(() => {});
-      return;
     }
-    this.resetStopwatchInternal();
   }
 
   private resetStopwatchInternal() {
