@@ -26,6 +26,7 @@ struct FocusTabView: View {
                             Button {
                                 withAnimation(.easeInOut(duration: 0.15)) {
                                     selectedMode = mode
+                                    focusClock.activeMode = mode
                                 }
                             } label: {
                                 HStack(spacing: 6) {

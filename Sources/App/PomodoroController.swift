@@ -32,6 +32,7 @@ public final class PomodoroController: ObservableObject {
     }
 
     public func startFocus(subject: String? = nil) {
+        FocusClockController.shared.activeMode = .pomodoro
         let resolvedSubject = subject ?? TargetGoalController.shared.primaryGoal?.title ?? config.defaultSubjectTag
         _ = clock.startFocus(subject: resolvedSubject, now: Date())
         state = clock.state
@@ -47,6 +48,7 @@ public final class PomodoroController: ObservableObject {
     }
 
     public func startBreak(isLong: Bool = false) {
+        FocusClockController.shared.activeMode = .pomodoro
         _ = clock.startBreak(isLong: isLong, now: Date())
         state = clock.state
         store.save(config: config, state: state)
@@ -88,6 +90,7 @@ public final class PomodoroController: ObservableObject {
     }
 
     public func resume() {
+        FocusClockController.shared.activeMode = .pomodoro
         clock.resume(now: Date())
         state = clock.state
         store.save(config: config, state: state)

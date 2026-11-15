@@ -45,6 +45,7 @@ public final class FocusClockController: ObservableObject {
         let duration = TimeInterval(max(1, minutes) * 60)
         timerEngine.start(duration: duration, subject: resolvedSubject, now: Date())
         timerState = timerEngine.state
+        activeMode = .timer
         syncHeartbeat()
 
         NSSound(named: "Glass")?.play()
@@ -55,6 +56,7 @@ public final class FocusClockController: ObservableObject {
     public func pauseTimer() {
         timerEngine.pause(now: Date())
         timerState = timerEngine.state
+        activeMode = .timer
         syncHeartbeat()
         PetController.shared.update(sessions: AppDaemon.shared.sessions)
     }
@@ -62,6 +64,7 @@ public final class FocusClockController: ObservableObject {
     public func resumeTimer() {
         timerEngine.resume(now: Date())
         timerState = timerEngine.state
+        activeMode = .timer
         syncHeartbeat()
         PetController.shared.update(sessions: AppDaemon.shared.sessions)
     }
@@ -69,6 +72,7 @@ public final class FocusClockController: ObservableObject {
     public func addTimerMinutes(_ minutes: Int) {
         timerEngine.addMinutes(minutes)
         timerState = timerEngine.state
+        activeMode = .timer
         PetController.shared.flashReactiveLine("+\(minutes)m added to timer ⏱")
         PetController.shared.update(sessions: AppDaemon.shared.sessions)
     }
@@ -106,6 +110,7 @@ public final class FocusClockController: ObservableObject {
         let resolvedSubject = subject ?? TargetGoalController.shared.primaryGoal?.title ?? "Stopwatch Session"
         stopwatchEngine.start(subject: resolvedSubject, now: Date())
         stopwatchState = stopwatchEngine.state
+        activeMode = .stopwatch
         syncHeartbeat()
 
         NSSound(named: "Blow")?.play()
@@ -116,6 +121,7 @@ public final class FocusClockController: ObservableObject {
     public func pauseStopwatch() {
         stopwatchEngine.pause(now: Date())
         stopwatchState = stopwatchEngine.state
+        activeMode = .stopwatch
         syncHeartbeat()
         PetController.shared.update(sessions: AppDaemon.shared.sessions)
     }
@@ -123,6 +129,7 @@ public final class FocusClockController: ObservableObject {
     public func resumeStopwatch() {
         stopwatchEngine.resume(now: Date())
         stopwatchState = stopwatchEngine.state
+        activeMode = .stopwatch
         syncHeartbeat()
         PetController.shared.update(sessions: AppDaemon.shared.sessions)
     }
