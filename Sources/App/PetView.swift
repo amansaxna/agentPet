@@ -171,13 +171,18 @@ struct FloatingPetView: View {
                                 )
                             }
 
-                            if isFocusActive || hasVisibleAgents {
-                                AgentBubble(sessions: model.sessions, showPomodoro: isFocusActive)
-                            } else if isQuoteActive {
-                                PetQuoteBubble(quote: quoteCtrl.currentQuote)
-                            } else if !model.chatLine.isEmpty {
-                                ChatBubble(text: model.chatLine,
-                                                        projectName: pet.splitPet ? model.projectName : nil)
+                            if isFocusActive {
+                                PetFocusBubble(showTail: !hasVisibleAgents)
+                            }
+                            if hasVisibleAgents {
+                                AgentBubble(sessions: model.sessions)
+                            } else if !isFocusActive {
+                                if isQuoteActive {
+                                    PetQuoteBubble(quote: quoteCtrl.currentQuote)
+                                } else if !model.chatLine.isEmpty {
+                                    ChatBubble(text: model.chatLine,
+                                               projectName: pet.splitPet ? model.projectName : nil)
+                                }
                             }
                         }
                     )
@@ -392,7 +397,7 @@ struct AgentBubble: View {
     private var isPetChat: Bool { tailEdge == .bottom }
     // Capsule for single visible row; rounded rect when taller or carousel dots are shown.
     private var useCapsule: Bool {
-        isPetChat && totalRows <= 1 && settings.displayMode != .compact
+        !isPetChat && totalRows <= 1 && settings.displayMode != .compact
     }
 
     var body: some View {
@@ -409,24 +414,24 @@ struct AgentBubble: View {
             VStack(alignment: .leading, spacing: isPetChat ? 4 : 5) {
                 bubbleContent
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, isPetChat ? 7 : 9)
+            .padding(.horizontal, isPetChat ? 10 : 12)
+            .padding(.vertical, isPetChat ? 8 : 9)
             .background {
                 if useCapsule {
                     Capsule().fill(fill)
                 } else {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous).fill(fill)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(fill)
                 }
             }
             .overlay {
                 if useCapsule {
                     Capsule().strokeBorder(stroke, lineWidth: 1)
                 } else {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(stroke, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(stroke, lineWidth: 1)
                 }
             }
             .compositingGroup()
-            .shadow(color: .black.opacity(0.18), radius: 5, y: 2)
+            .shadow(color: isPetChat ? .black.opacity(0.28) : .black.opacity(0.18), radius: isPetChat ? 6 : 5, y: isPetChat ? 3 : 2)
             if tailEdge == .bottom {
                 Triangle()
                     .fill(fill)
@@ -435,7 +440,7 @@ struct AgentBubble: View {
             }
         }
         .fixedSize(horizontal: isPetChat, vertical: true)
-        .frame(maxWidth: 420, alignment: .leading)
+        .frame(maxWidth: isPetChat ? 320 : 420, alignment: .leading)
     }
 
     /// Inner content width cap (bubble max minus horizontal padding).
@@ -444,6 +449,9 @@ struct AgentBubble: View {
     static let petContentMaxWidth: CGFloat = 320
 
     private var bubbleFill: Color {
+        if isPetChat {
+            return Color(red: 0.10, green: 0.11, blue: 0.16).opacity(0.96)
+        }
         switch settings.theme {
         case .light:  return Color.white.opacity(settings.opacity)
         case .dark:   return Color(nsColor: .windowBackgroundColor).opacity(settings.opacity)
@@ -452,6 +460,9 @@ struct AgentBubble: View {
     }
 
     private var borderColor: Color {
+        if isPetChat {
+            return Color.white.opacity(0.15)
+        }
         switch settings.theme {
         case .light:  return .black.opacity(0.06)
         case .dark:   return .white.opacity(0.12)
@@ -486,6 +497,9 @@ struct AgentBubble: View {
     }
 
     private func textColor(_ opacity: Double) -> Color {
+        if isPetChat {
+            return .white.opacity(opacity)
+        }
         switch settings.theme {
         case .light:  return .black.opacity(opacity)
         case .dark:   return .white.opacity(opacity)
@@ -1477,181 +1491,179 @@ private struct TapToFocus: ViewModifier {
 
 // MARK: - Simple Chat Bubble (celebrate / done / waiting fallback)
 
-/// A plain speech bubble with a downward tail, used for celebrate/done lines.
-/// Theme-aware (light/dark/system); reused by the Settings live preview.
-/// When `projectName` is non-nil (split-pet mode), a small dimmed caption is
-/// rendered above the main text so the window is identifiable.
+/// A speech bubble matching the canonical dark notification card style.
 struct ChatBubble: View {
     let text: String
     var projectName: String? = nil
+    var showTail: Bool = true
     @ObservedObject private var settings = BubbleSettings.shared
     @Environment(\.bubbleTailOffset) private var tailOffset
 
     private var fill: Color {
-        switch settings.theme {
-        case .light:  return Color.white.opacity(settings.opacity)
-        case .dark:   return Color(nsColor: .windowBackgroundColor).opacity(settings.opacity)
-        case .system: return Color(nsColor: .textBackgroundColor).opacity(settings.opacity)
-        }
-    }
-
-    private var textColor: Color {
-        switch settings.theme {
-        case .light:  return .black.opacity(0.85)
-        case .dark:   return .white.opacity(0.85)
-        case .system: return Color.primary.opacity(0.85)
-        }
-    }
-
-    private var dimmedTextColor: Color {
-        switch settings.theme {
-        case .light:  return .black.opacity(0.45)
-        case .dark:   return .white.opacity(0.45)
-        case .system: return Color.primary.opacity(0.45)
-        }
-    }
-
-    private var borderColor: Color {
-        switch settings.theme {
-        case .light:  return .black.opacity(0.06)
-        case .dark:   return .white.opacity(0.12)
-        case .system: return Color.primary.opacity(0.08)
-        }
+        Color(red: 0.10, green: 0.11, blue: 0.16).opacity(0.96)
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            ZStack(alignment: .topTrailing) {
-                VStack(spacing: 2) {
-                    if let name = projectName {
-                        Text(name)
-                            .font(.system(size: settings.fontSize.secondaryPt, weight: .regular))
-                            .foregroundStyle(dimmedTextColor)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
+            VStack(alignment: .leading, spacing: 4) {
+                // Header Row
+                HStack(spacing: 5) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.cyan)
+                    Text(projectName ?? "AgentPet")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Button {
+                        QuoteController.shared.dismiss()
+                        PetController.shared.dismissBubble()
+                    } label: {
+                        Text("✕")
+                            .font(.system(size: 8, weight: .bold))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(Color.white.opacity(0.12)))
+                            .foregroundStyle(.white.opacity(0.6))
                     }
-                    Text(text)
-                        .font(.system(size: settings.fontSize.primaryPt, weight: .medium))
-                        .foregroundStyle(textColor)
-                        .contentTransition(.opacity)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(5)
-                        .fixedSize(horizontal: false, vertical: true)
+                    .buttonStyle(.plain)
+                    .help("Dismiss bubble")
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 8)
-                .frame(maxWidth: 320)
 
-                Button {
-                    QuoteController.shared.dismiss()
-                    PetController.shared.dismissBubble()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(dimmedTextColor)
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 4)
-                .padding(.trailing, 5)
-                .help("Dismiss bubble")
+                // Message Text
+                Text(text)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .lineSpacing(2)
+                    .lineLimit(5)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(fill))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(borderColor, lineWidth: 1))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(fill))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.white.opacity(0.15), lineWidth: 1))
             .compositingGroup()
-            .shadow(color: .black.opacity(0.18), radius: 5, y: 2)
+            .shadow(color: .black.opacity(0.28), radius: 6, y: 3)
 
-            Triangle()
-                .fill(fill)
-                .frame(width: 12, height: 7)
-                .offset(x: tailOffset)
+            if showTail {
+                Triangle()
+                    .fill(fill)
+                    .frame(width: 12, height: 7)
+                    .offset(x: tailOffset)
+            }
         }
-        .frame(maxWidth: 330)
+        .fixedSize(horizontal: true, vertical: true)
+        .frame(maxWidth: 320)
     }
 }
 
-// MARK: - Desktop Pet Focus Music Capsule Bubble
+// MARK: - Desktop Pet Focus Music Card Bubble
 
 struct PetMusicBubble: View {
     let station: FocusMusicStation
     let onStop: () -> Void
     var showTail: Bool = true
-    @ObservedObject private var settings = BubbleSettings.shared
     @ObservedObject private var musicCtrl = FocusMusicController.shared
     @Environment(\.bubbleTailOffset) private var tailOffset
 
     private var fill: Color {
-        switch settings.theme {
-        case .light:  return Color.white.opacity(settings.opacity)
-        case .dark:   return Color(nsColor: .windowBackgroundColor).opacity(settings.opacity)
-        case .system: return Color(nsColor: .textBackgroundColor).opacity(settings.opacity)
-        }
+        Color(red: 0.10, green: 0.11, blue: 0.16).opacity(0.96)
     }
 
-    private var stroke: Color {
-        switch settings.theme {
-        case .light:  return .black.opacity(0.08)
-        case .dark:   return .white.opacity(0.15)
-        case .system: return Color.primary.opacity(0.1)
-        }
+    private var accentColor: Color {
+        Color(red: 0.38, green: 0.72, blue: 0.82)
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 6) {
-                Image(systemName: "speaker.wave.2.fill")
-                    .font(.system(size: 9.5, weight: .bold))
-                    .foregroundStyle(Color(red: 0.38, green: 0.72, blue: 0.82))
-
-                Text("Playing:")
-                    .font(.system(size: 9.5, weight: .medium))
-                    .foregroundStyle(Color.primary.opacity(0.50))
+            VStack(alignment: .leading, spacing: 4) {
+                // Header Row
+                HStack(spacing: 5) {
+                    Image(systemName: "headphones")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(accentColor)
+                    Text("Focus Music")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                    Spacer(minLength: 4)
+                    Text(musicCtrl.isPlaying ? "PLAYING" : "PAUSED")
+                        .font(.system(size: 8, weight: .black))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(RoundedRectangle(cornerRadius: 3).fill(accentColor.opacity(0.35)))
+                        .foregroundStyle(accentColor)
+                }
 
                 Text(station.title)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Color.primary.opacity(0.88))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.90))
                     .lineLimit(1)
 
-                Button {
-                    musicCtrl.nextStation()
-                } label: {
-                    Image(systemName: "forward.fill")
-                        .font(.system(size: 6.5, weight: .bold))
-                        .foregroundStyle(Color.primary.opacity(0.60))
-                        .frame(width: 15, height: 15)
-                        .background(Circle().fill(Color.primary.opacity(0.07)))
-                }
-                .buttonStyle(.plain)
-                .help("Next Station: \(musicCtrl.currentStation.title)")
-
-                Button(action: onStop) {
-                    HStack(spacing: 2.5) {
-                        Image(systemName: "stop.fill")
-                            .font(.system(size: 6.5, weight: .bold))
-                        Text("Stop")
-                            .font(.system(size: 8.5, weight: .semibold))
+                // Actions Row
+                HStack(spacing: 5) {
+                    Button {
+                        musicCtrl.togglePlay()
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: musicCtrl.isPlaying ? "pause.fill" : "play.fill")
+                            Text(musicCtrl.isPlaying ? "Pause" : "Play")
+                        }
+                        .font(.system(size: 9, weight: .bold))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(accentColor.opacity(0.85)))
+                        .foregroundStyle(.white)
                     }
-                    .foregroundStyle(Color(red: 0.90, green: 0.45, blue: 0.45))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2.5)
-                    .background(Capsule().fill(Color.red.opacity(0.14)))
+                    .buttonStyle(.plain)
+
+                    Button {
+                        musicCtrl.nextStation()
+                    } label: {
+                        HStack(spacing: 2) {
+                            Image(systemName: "forward.fill").font(.system(size: 7))
+                            Text("Next")
+                        }
+                        .font(.system(size: 9, weight: .medium))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.white.opacity(0.18)))
+                        .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Next station: \(musicCtrl.currentStation.title)")
+
+                    Button(action: onStop) {
+                        HStack(spacing: 2.5) {
+                            Image(systemName: "stop.fill").font(.system(size: 6.5))
+                            Text("Stop")
+                        }
+                        .font(.system(size: 8.5, weight: .bold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.red.opacity(0.20)))
+                        .foregroundStyle(Color(red: 0.92, green: 0.45, blue: 0.45))
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-                .help("Stop Focus Music")
+                .padding(.top, 2)
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Capsule().fill(fill))
-            .overlay(Capsule().strokeBorder(stroke, lineWidth: 1))
+            .padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(fill))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(accentColor.opacity(0.5), lineWidth: 1))
             .compositingGroup()
-            .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
+            .shadow(color: .black.opacity(0.28), radius: 6, y: 3)
 
             if showTail {
                 Triangle()
                     .fill(fill)
-                    .frame(width: 10, height: 5)
+                    .frame(width: 12, height: 7)
                     .offset(x: tailOffset)
             }
         }
+        .fixedSize(horizontal: true, vertical: true)
+        .frame(maxWidth: 320)
     }
 }
 
@@ -1659,154 +1671,393 @@ struct PetMusicBubble: View {
 
 struct PetQuoteBubble: View {
     let quote: QuoteItem
+    var showTail: Bool = true
     @ObservedObject private var quoteCtrl = QuoteController.shared
     @ObservedObject private var musicCtrl = FocusMusicController.shared
-    @ObservedObject private var settings = BubbleSettings.shared
     @Environment(\.bubbleTailOffset) private var tailOffset
 
     private var fill: Color {
-        switch settings.theme {
-        case .light:  return Color.white.opacity(settings.opacity)
-        case .dark:   return Color(nsColor: .windowBackgroundColor).opacity(settings.opacity)
-        case .system: return Color(nsColor: .textBackgroundColor).opacity(settings.opacity)
-        }
+        Color(red: 0.10, green: 0.11, blue: 0.16).opacity(0.96)
     }
 
-    private var textColor: Color {
-        switch settings.theme {
-        case .light:  return .black.opacity(0.92)
-        case .dark:   return .white.opacity(0.95)
-        case .system: return Color.primary.opacity(0.95)
-        }
-    }
-
-    private var dimmedTextColor: Color {
-        switch settings.theme {
-        case .light:  return .black.opacity(0.65)
-        case .dark:   return .white.opacity(0.65)
-        case .system: return Color.primary.opacity(0.65)
-        }
-    }
-
-    private var borderColor: Color {
-        switch settings.theme {
-        case .light:  return .black.opacity(0.08)
-        case .dark:   return .white.opacity(0.15)
-        case .system: return Color.primary.opacity(0.1)
-        }
+    private var accentColor: Color {
+        Color.orange
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 4) {
-                    HStack(spacing: 3) {
-                        Image(systemName: quote.category.icon)
-                            .font(.system(size: 8))
-                        Text(quote.category.displayName.uppercased())
-                            .font(.system(size: 8, weight: .bold))
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2.5)
-                    .background(Capsule().fill(Color.orange.opacity(0.25)))
-                    .foregroundStyle(Color.orange)
-
+            VStack(alignment: .leading, spacing: 4) {
+                // Header Row
+                HStack(spacing: 5) {
+                    Image(systemName: quote.category.icon)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(accentColor)
+                    Text(quote.category.displayName)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
                     Spacer(minLength: 4)
+                    Text("QUOTE")
+                        .font(.system(size: 8, weight: .black))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(RoundedRectangle(cornerRadius: 3).fill(accentColor.opacity(0.35)))
+                        .foregroundStyle(accentColor)
+                }
+
+                // Quote Content
+                Text("“\(quote.text)”")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .lineSpacing(2)
+                    .lineLimit(4)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if !quote.authorOrMeaning.isEmpty || quote.category == .idioms {
+                    Text(quote.category == .idioms ? "Meaning: \(quote.authorOrMeaning)" : "— \(quote.authorOrMeaning.isEmpty ? quote.category.displayName : quote.authorOrMeaning)")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.white.opacity(0.60))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+
+                // Actions Row
+                HStack(spacing: 5) {
+                    Button {
+                        quoteCtrl.nextQuote()
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.clockwise")
+                            Text("Next")
+                        }
+                        .font(.system(size: 9, weight: .bold))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.white.opacity(0.18)))
+                        .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Next quote")
+
+                    Button {
+                        quoteCtrl.toggleFavorite(id: quote.id)
+                    } label: {
+                        HStack(spacing: 2) {
+                            Image(systemName: quote.isFavorite ? "star.fill" : "star")
+                                .foregroundStyle(quote.isFavorite ? Color.yellow : .white)
+                            Text(quote.isFavorite ? "Saved" : "Save")
+                        }
+                        .font(.system(size: 9, weight: .medium))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.white.opacity(0.18)))
+                        .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
 
                     if musicCtrl.isPlaying {
                         Button {
                             musicCtrl.stop()
                         } label: {
                             HStack(spacing: 2) {
-                                Image(systemName: "stop.fill")
-                                    .font(.system(size: 6.5, weight: .bold))
-                                Text("Stop Music")
-                                    .font(.system(size: 7.5, weight: .semibold))
+                                Image(systemName: "speaker.slash.fill").font(.system(size: 7))
+                                Text("Music")
                             }
-                            .foregroundStyle(Color(red: 0.90, green: 0.45, blue: 0.45))
+                            .font(.system(size: 8.5, weight: .medium))
                             .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.red.opacity(0.14)))
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(Color.red.opacity(0.18)))
+                            .foregroundStyle(Color(red: 0.90, green: 0.45, blue: 0.45))
                         }
                         .buttonStyle(.plain)
                         .help("Stop Focus Music")
-                    } else {
-                        Button {
-                            musicCtrl.play()
-                        } label: {
-                            Image(systemName: "music.note")
-                                .font(.system(size: 9))
-                                .foregroundStyle(dimmedTextColor)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Play Focus Music")
                     }
 
-                    Button {
-                        quoteCtrl.toggleFavorite(id: quote.id)
-                    } label: {
-                        Image(systemName: quote.isFavorite ? "star.fill" : "star")
-                            .font(.system(size: 9.5))
-                            .foregroundStyle(quote.isFavorite ? Color.yellow : dimmedTextColor)
-                    }
-                    .buttonStyle(.plain)
-                    .help(quote.isFavorite ? "Remove favorite" : "Favorite quote")
-
-                    Button {
-                        quoteCtrl.nextQuote()
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 9))
-                            .foregroundStyle(dimmedTextColor)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Next quote")
+                    Spacer()
 
                     Button {
                         quoteCtrl.dismiss()
                         PetController.shared.dismissBubble()
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(dimmedTextColor)
+                        Text("✕")
+                            .font(.system(size: 8, weight: .bold))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(Color.white.opacity(0.12)))
+                            .foregroundStyle(.white.opacity(0.6))
                     }
                     .buttonStyle(.plain)
-                    .help("Close quote bubble")
+                    .help("Dismiss quote")
                 }
-
-                Text("“\(quote.text)”")
-                    .font(.system(size: max(11, settings.fontSize.primaryPt), weight: .medium, design: .serif))
-                    .foregroundStyle(textColor)
-                    .lineSpacing(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .multilineTextAlignment(.leading)
-
-                if !quote.authorOrMeaning.isEmpty || quote.category == .idioms {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(quote.category == .idioms ? "Meaning: \(quote.authorOrMeaning)" : "— \(quote.authorOrMeaning.isEmpty ? quote.category.displayName : quote.authorOrMeaning)")
-                            .font(.system(size: max(9.5, settings.fontSize.secondaryPt - 0.5), design: .serif))
-                            .foregroundStyle(dimmedTextColor)
-                            .lineSpacing(1.5)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .multilineTextAlignment(.trailing)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                }
+                .padding(.top, 2)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .frame(width: 320)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(fill))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(borderColor, lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(accentColor.opacity(0.5), lineWidth: 1))
             .compositingGroup()
-            .shadow(color: .black.opacity(0.18), radius: 5, y: 2)
+            .shadow(color: .black.opacity(0.28), radius: 6, y: 3)
 
-            Triangle()
-                .fill(fill)
-                .frame(width: 12, height: 7)
-                .offset(x: tailOffset)
+            if showTail {
+                Triangle()
+                    .fill(fill)
+                    .frame(width: 12, height: 7)
+                    .offset(x: tailOffset)
+            }
         }
-        .frame(width: 320)
+        .fixedSize(horizontal: true, vertical: true)
+        .frame(maxWidth: 320)
+    }
+}
+
+// MARK: - Desktop Pet Focus Bubble (Timer / Stopwatch / Pomodoro)
+
+struct PetFocusBubble: View {
+    var showTail: Bool = true
+    @ObservedObject private var pomoCtrl = PomodoroController.shared
+    @ObservedObject private var focusClock = FocusClockController.shared
+    @ObservedObject private var musicCtrl = FocusMusicController.shared
+    @Environment(\.bubbleTailOffset) private var tailOffset
+
+    private var fill: Color {
+        Color(red: 0.10, green: 0.11, blue: 0.16).opacity(0.96)
+    }
+
+    private var activeMode: FocusMode {
+        focusClock.activeMode
+    }
+
+    private var accentColor: Color {
+        switch activeMode {
+        case .pomodoro:
+            return pomoCtrl.state.phase == .focus ? Color.orange : Color(red: 0.35, green: 0.75, blue: 0.60)
+        case .timer:
+            return Color(red: 0.38, green: 0.72, blue: 0.82)
+        case .stopwatch:
+            return Color(red: 0.35, green: 0.75, blue: 0.60)
+        }
+    }
+
+    private var icon: String {
+        switch activeMode {
+        case .pomodoro:
+            return pomoCtrl.state.phase == .focus ? "brain.head.profile" : "cup.and.saucer.fill"
+        case .timer:
+            return "timer"
+        case .stopwatch:
+            return "stopwatch"
+        }
+    }
+
+    private var title: String {
+        switch activeMode {
+        case .pomodoro:
+            if pomoCtrl.state.phase == .focus {
+                return pomoCtrl.state.activeSubject.isEmpty ? "Focus Session" : pomoCtrl.state.activeSubject
+            } else {
+                return "Break Time"
+            }
+        case .timer:
+            let s = focusClock.timerState.activeSubject
+            return (s.isEmpty || s == "Focus Timer") ? "Focus Timer" : s
+        case .stopwatch:
+            let s = focusClock.stopwatchState.activeSubject
+            return (s.isEmpty || s == "Focus Stopwatch" || s == "Stopwatch Session") ? "Stopwatch" : s
+        }
+    }
+
+    private var badgeText: String {
+        switch activeMode {
+        case .pomodoro:
+            if pomoCtrl.state.isPaused { return "PAUSED" }
+            return pomoCtrl.state.phase == .focus ? "FOCUS" : "BREAK"
+        case .timer:
+            if focusClock.timerState.state == .paused { return "PAUSED" }
+            return "TIMER"
+        case .stopwatch:
+            if focusClock.stopwatchState.state == .paused { return "PAUSED" }
+            return "STOPWATCH"
+        }
+    }
+
+    private var timeString: String {
+        switch activeMode {
+        case .pomodoro:
+            return pomoCtrl.state.formattedRemaining
+        case .timer:
+            return focusClock.timerState.formattedRemaining
+        case .stopwatch:
+            return focusClock.stopwatchState.formattedElapsed
+        }
+    }
+
+    private var isPaused: Bool {
+        switch activeMode {
+        case .pomodoro:
+            return pomoCtrl.state.isPaused
+        case .timer:
+            return focusClock.timerState.state == .paused
+        case .stopwatch:
+            return focusClock.stopwatchState.state == .paused
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                // Header Row
+                HStack(spacing: 5) {
+                    Image(systemName: icon)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(accentColor)
+                    Text(title)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(badgeText)
+                        .font(.system(size: 8, weight: .black))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(RoundedRectangle(cornerRadius: 3).fill(accentColor.opacity(0.35)))
+                        .foregroundStyle(accentColor)
+                }
+
+                // Clock and status
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(timeString)
+                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.white)
+
+                    if musicCtrl.isPlaying {
+                        HStack(spacing: 3) {
+                            Image(systemName: "speaker.wave.2.fill")
+                                .font(.system(size: 8))
+                            Text(musicCtrl.currentStation.title)
+                                .font(.system(size: 9))
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(Color(red: 0.38, green: 0.72, blue: 0.82))
+                    }
+                }
+
+                // Actions Row
+                HStack(spacing: 5) {
+                    // Pause / Resume
+                    Button {
+                        togglePause()
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: isPaused ? "play.fill" : "pause.fill")
+                            Text(isPaused ? "Resume" : "Pause")
+                        }
+                        .font(.system(size: 9, weight: .bold))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(accentColor.opacity(0.85)))
+                        .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+
+                    // +5m for timer countdown
+                    if activeMode == .timer {
+                        Button {
+                            addFiveMinutes()
+                        } label: {
+                            Text("+5m")
+                                .font(.system(size: 9, weight: .medium))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(Capsule().fill(Color.white.opacity(0.18)))
+                                .foregroundStyle(.white)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    // Music toggle
+                    Button {
+                        musicCtrl.togglePlay()
+                    } label: {
+                        HStack(spacing: 2) {
+                            Image(systemName: musicCtrl.isPlaying ? "speaker.slash.fill" : "music.note")
+                                .font(.system(size: 7.5))
+                            Text(musicCtrl.isPlaying ? "Music" : "Music")
+                        }
+                        .font(.system(size: 8.5, weight: .medium))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.white.opacity(musicCtrl.isPlaying ? 0.22 : 0.12)))
+                        .foregroundStyle(musicCtrl.isPlaying ? Color(red: 0.38, green: 0.72, blue: 0.82) : .white.opacity(0.75))
+                    }
+                    .buttonStyle(.plain)
+                    .help(musicCtrl.isPlaying ? "Stop Focus Music" : "Play Focus Music")
+
+                    // Stop button
+                    Button {
+                        stopSession()
+                    } label: {
+                        HStack(spacing: 2.5) {
+                            Image(systemName: "stop.fill").font(.system(size: 6.5))
+                            Text("Stop")
+                        }
+                        .font(.system(size: 8.5, weight: .bold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.red.opacity(0.20)))
+                        .foregroundStyle(Color(red: 0.92, green: 0.45, blue: 0.45))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.top, 2)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(fill))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(accentColor.opacity(0.5), lineWidth: 1))
+            .compositingGroup()
+            .shadow(color: .black.opacity(0.28), radius: 6, y: 3)
+
+            if showTail {
+                Triangle()
+                    .fill(fill)
+                    .frame(width: 12, height: 7)
+                    .offset(x: tailOffset)
+            }
+        }
+        .fixedSize(horizontal: true, vertical: true)
+        .frame(maxWidth: 320)
+    }
+
+    private func togglePause() {
+        switch activeMode {
+        case .pomodoro:
+            if pomoCtrl.state.isPaused { pomoCtrl.resume() } else { pomoCtrl.pause() }
+        case .timer:
+            if focusClock.timerState.state == .paused { focusClock.resumeTimer() } else { focusClock.pauseTimer() }
+        case .stopwatch:
+            if focusClock.stopwatchState.state == .paused { focusClock.resumeStopwatch() } else { focusClock.pauseStopwatch() }
+        }
+    }
+
+    private func addFiveMinutes() {
+        switch activeMode {
+        case .pomodoro:
+            break
+        case .timer:
+            focusClock.addTimerMinutes(5)
+        case .stopwatch:
+            break
+        }
+    }
+
+    private func stopSession() {
+        switch activeMode {
+        case .pomodoro:
+            pomoCtrl.stop()
+        case .timer:
+            focusClock.stopTimer()
+        case .stopwatch:
+            focusClock.stopStopwatch()
+        }
     }
 }
 
