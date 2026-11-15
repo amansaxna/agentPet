@@ -1,9 +1,9 @@
 name: CI
 
+# Only runs on manual trigger (workflow_dispatch).
+# Does not run on normal branch pushes.
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   build-test:

@@ -17,6 +17,7 @@ import * as reminders from "./reminders";
 import * as quotes from "./quotes";
 import * as worktracker from "./worktracker";
 import { focusMusic } from "./focusmusic";
+import { focusClock, type FocusMode } from "./focusclock";
 import { savedSlug, getLibrary, petDisplayName } from "./catalog";
 import { t, getLang, setLang, type Lang } from "./i18n";
 import { cardHtml, hintText, esc } from "./statscard";
@@ -309,6 +310,94 @@ function bindCardActions() {
     };
   });
 
+  // Focus Mode Switcher
+  body.querySelectorAll<HTMLButtonElement>('[data-action="focus-mode"]').forEach((btn) => {
+    btn.onclick = () => {
+      const mode = btn.dataset.mode as FocusMode | undefined;
+      if (mode) {
+        focusClock.setActiveMode(mode);
+        paint();
+      }
+    };
+  });
+
+  // Countdown Timer Controls
+  body.querySelectorAll<HTMLButtonElement>('[data-action="timer-start"]').forEach((btn) => {
+    btn.onclick = () => {
+      const mins = Number(btn.dataset.mins) || 15;
+      focusClock.startTimer(mins);
+      paint();
+    };
+  });
+  body.querySelectorAll<HTMLButtonElement>('[data-action="timer-pause"]').forEach((btn) => {
+    btn.onclick = () => {
+      focusClock.pauseTimer();
+      paint();
+    };
+  });
+  body.querySelectorAll<HTMLButtonElement>('[data-action="timer-resume"]').forEach((btn) => {
+    btn.onclick = () => {
+      focusClock.resumeTimer();
+      paint();
+    };
+  });
+  body.querySelectorAll<HTMLButtonElement>('[data-action="timer-add-5"]').forEach((btn) => {
+    btn.onclick = () => {
+      focusClock.addTimerMinutes(5);
+      paint();
+    };
+  });
+  body.querySelectorAll<HTMLButtonElement>('[data-action="timer-stop"]').forEach((btn) => {
+    btn.onclick = () => {
+      focusClock.stopTimer();
+      paint();
+    };
+  });
+  body.querySelectorAll<HTMLButtonElement>('[data-action="timer-reset"]').forEach((btn) => {
+    btn.onclick = () => {
+      focusClock.resetTimer();
+      paint();
+    };
+  });
+
+  // Stopwatch Controls
+  body.querySelectorAll<HTMLButtonElement>('[data-action="stopwatch-start"]').forEach((btn) => {
+    btn.onclick = () => {
+      focusClock.startStopwatch();
+      paint();
+    };
+  });
+  body.querySelectorAll<HTMLButtonElement>('[data-action="stopwatch-pause"]').forEach((btn) => {
+    btn.onclick = () => {
+      focusClock.pauseStopwatch();
+      paint();
+    };
+  });
+  body.querySelectorAll<HTMLButtonElement>('[data-action="stopwatch-resume"]').forEach((btn) => {
+    btn.onclick = () => {
+      focusClock.resumeStopwatch();
+      paint();
+    };
+  });
+  body.querySelectorAll<HTMLButtonElement>('[data-action="stopwatch-lap"]').forEach((btn) => {
+    btn.onclick = () => {
+      focusClock.lapStopwatch();
+      paint();
+    };
+  });
+  body.querySelectorAll<HTMLButtonElement>('[data-action="stopwatch-stop"]').forEach((btn) => {
+    btn.onclick = () => {
+      focusClock.stopStopwatch();
+      paint();
+    };
+  });
+  body.querySelectorAll<HTMLButtonElement>('[data-action="stopwatch-reset"]').forEach((btn) => {
+    btn.onclick = () => {
+      focusClock.resetStopwatch();
+      paint();
+    };
+  });
+
   // Manual Clock In / Clock Out
   body.querySelectorAll<HTMLButtonElement>('[data-action="toggle-manual-work"]').forEach((btn) => {
     btn.onclick = () => {
@@ -518,6 +607,8 @@ try { listen<Lang>("lang-changed", (e) => { setLang(e.payload); applyStatic(); l
 window.addEventListener("goals-changed", () => { lastHtml = ""; paint(); });
 window.addEventListener("worktracker-changed", () => { lastHtml = ""; paint(); });
 window.addEventListener("pomodoro-changed", () => { lastHtml = ""; paint(); });
+window.addEventListener("focusclock-changed", () => { lastHtml = ""; paint(); });
+window.addEventListener("focusmusic-changed", () => { lastHtml = ""; paint(); });
 window.addEventListener("reminders-changed", () => { lastHtml = ""; paint(); });
 window.addEventListener("quotes-changed", () => { lastHtml = ""; paint(); });
 

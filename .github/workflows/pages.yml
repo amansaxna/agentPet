@@ -1,13 +1,8 @@
 name: Deploy docs to Pages
 
-# Publishes /docs (appcast + landing) to GitHub Pages. Only runs when /docs
-# actually changes, and serialises deploys so rapid pushes queue instead of
-# racing (the legacy branch deploy failed with "try again later" on concurrent
-# pushes). Can also be run manually from the Actions tab.
+# Publishes /docs to GitHub Pages.
+# Only runs when manually triggered (workflow_dispatch).
 on:
-  push:
-    branches: [main]
-    paths: ["docs/**"]
   workflow_dispatch:
 
 permissions:

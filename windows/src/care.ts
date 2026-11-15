@@ -228,6 +228,14 @@ export function formattedFocus(seconds: number): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+export function recordAffection(s: CareState, now = new Date()): number {
+  rollover(s, now);
+  const gained = 5;
+  s.xp += gained;
+  unlockNewAchievements(s, now);
+  return gained;
+}
+
 /** Tokens per day for the trailing `count` days, oldest first, for the chart. */
 export function recentDays(s: CareState, count = 7, now = new Date()): { label: string; tokens: number }[] {
   const out: { label: string; tokens: number }[] = [];

@@ -2,7 +2,7 @@ import { listen, emit } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { Pet, HIT_PAD } from "./pet";
 import { SessionStore, aggregateMood, type AgentEventPayload } from "./state";
-import { BubbleRenderer } from "./bubble";
+import { BubbleRenderer, type FocusClockBubbleItem } from "./bubble";
 import { loadCatalog, savedSlug, saveSlug, rememberPetUrl, selectedPetUrl } from "./catalog";
 import { t, setLang, type Lang } from "./i18n";
 import { bubbleLines, PET_CHAT } from "./activity";
@@ -18,6 +18,7 @@ import * as reminders from "./reminders";
 import * as pomodoro from "./pomodoro";
 import * as quotes from "./quotes";
 import { focusMusic } from "./focusmusic";
+import { focusClock, formatFocusTime } from "./focusclock";
 
 // Which project THIS pet window represents. `null` = the main window (the
 // default single pet). Split-pet spawns extra windows with `?project=<id>`.
@@ -269,37 +270,121 @@ function render() {
     return;
   }
 
-  if (pomo.phase !== "idle" && !sessions.length && !celebrating) {
-    pet.setState(pomo.phase === "focus" ? "working" : "sleepy");
-    bubble.renderPomodoro(
-      {
-        phase: pomo.phase,
-        remainingSeconds: pomo.remainingSeconds,
-        isRunning: pomo.isRunning,
-        subject: pomo.subjectTag || "Focus",
-      },
-      () => {
+  // 1. Build focus clocks list (Pomodoro, Countdown Timer, Stopwatch)
+  const activeClocks: FocusClockBubbleItem[] = [];
+
+  if (pomo.phase !== "idle") {
+    const isPaused = !pomo.isRunning;
+    const dotColor = isPaused ? "#f59e0b" : (pomo.phase === "focus" ? "#3b82f6" : "#22c55e");
+    const icon = pomo.phase === "focus" ? "⏱" : "☕";
+    const phaseLabel = isPaused ? "Paused" : (pomo.phase === "focus" ? "Focus" : "Break");
+    const m = Math.floor(pomo.remainingSeconds / 60);
+    const s = pomo.remainingSeconds % 60;
+    const formatted = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    activeClocks.push({
+      id: "pomodoro",
+      icon,
+      phaseLabel,
+      timeStr: formatted,
+      dotColor,
+      isPaused,
+      onToggle: () => {
         if (pomo.isRunning) pomodoro.pause();
         else pomodoro.resume();
         render();
       },
-      () => {
+      onStop: () => {
         pomodoro.reset();
         render();
       },
-      () => {
+      onMusicToggle: () => {
         focusMusic.toggle();
         render();
       },
-      focusMusic.getPlaying()
-    );
-    snugBubble();
-    reportHitRect();
-    return;
+      isMusicPlaying: focusMusic.getPlaying(),
+    });
   }
 
-  const mood = celebrating ? "celebrate" : resolved;
+  if (focusClock.isTimerActive()) {
+    const tState = focusClock.getTimerState();
+    const isPaused = tState.state === "paused";
+    const dotColor = isPaused ? "#f59e0b" : "#38bdf8";
+    const phaseLabel = isPaused ? "Paused" : "Timer";
+    activeClocks.push({
+      id: "timer",
+      icon: "⏱",
+      phaseLabel,
+      timeStr: formatFocusTime(tState.secondsRemaining),
+      dotColor,
+      isPaused,
+      onToggle: () => {
+        if (isPaused) focusClock.resumeTimer();
+        else focusClock.pauseTimer();
+        render();
+      },
+      onStop: () => {
+        focusClock.stopTimer();
+        render();
+      },
+      onMusicToggle: () => {
+        focusMusic.toggle();
+        render();
+      },
+      isMusicPlaying: focusMusic.getPlaying(),
+    });
+  }
+
+  if (focusClock.isStopwatchActive()) {
+    const sState = focusClock.getStopwatchState();
+    const isPaused = sState.state === "paused";
+    const dotColor = isPaused ? "#f59e0b" : "#34d399";
+    const phaseLabel = isPaused ? "Paused" : "Stopwatch";
+    activeClocks.push({
+      id: "stopwatch",
+      icon: "⏱",
+      phaseLabel,
+      timeStr: formatFocusTime(sState.elapsedSeconds),
+      dotColor,
+      isPaused,
+      onToggle: () => {
+        if (isPaused) focusClock.resumeStopwatch();
+        else focusClock.pauseStopwatch();
+        render();
+      },
+      onStop: () => {
+        focusClock.stopStopwatch();
+        render();
+      },
+      onMusicToggle: () => {
+        focusMusic.toggle();
+        render();
+      },
+      isMusicPlaying: focusMusic.getPlaying(),
+    });
+  }
+
+  const activeSessions = sessions.filter((s) => s.state !== "idle" && s.state !== "registered");
+  const isFocusClockWorking = activeClocks.some((c) => !c.isPaused);
+  const mood = celebrating ? "celebrate" : (isFocusClockWorking && !activeSessions.length ? "working" : resolved);
   pet.setState(mood);
+
+  // If focus clocks OR active agent sessions exist, render them stacked together in one bubble
+  const hasFocusOrSessions = activeClocks.length > 0 || activeSessions.length > 0;
+  if (hasFocusOrSessions && !celebrating) {
+    const standaloneMusic = focusMusic.getPlaying() && !activeClocks.length
+      ? {
+          station: focusMusic.getCurrentStation(),
+          onStop: () => { focusMusic.stop(); render(); },
+          onNext: () => { focusMusic.nextStation(); render(); }
+        }
+      : undefined;
+
+    bubble.renderComposite(activeSessions, activeClocks, standaloneMusic);
+    snugBubble();
+    reportHitRect();
+    if (IS_MAIN) reportTrayStatus(store.active());
+    return;
+  }
 
   // A reactive comment briefly overrides the quiet single-line moods (not the
   // multi-agent working bubble, not the celebrate burst).
@@ -312,7 +397,7 @@ function render() {
     if (!moodLine) pickMoodLine(mood);
     bubble.renderLine(reactiveActive ? reactiveLine : moodLine);
   } else if (mood === "working" || mood === "waiting") {
-    bubble.render(sessions.filter((s) => s.state !== "idle" && s.state !== "registered"));
+    bubble.render(activeSessions);
   } else if (mood === "celebrate") {
     bubble.renderLine(moodLine || t("Done"));
   } else if (mood === "done") {
@@ -323,10 +408,17 @@ function render() {
     if (reactiveActive) {
       bubble.renderLine(reactiveLine);
     } else if (focusMusic.getPlaying() && (!quotes.getQuoteConfig().showInPetBubble || quoteDismissed)) {
-      bubble.renderMusicBubble(focusMusic.getCurrentStation(), () => {
-        focusMusic.stop();
-        render();
-      });
+      bubble.renderMusicBubble(
+        focusMusic.getCurrentStation(),
+        () => {
+          focusMusic.stop();
+          render();
+        },
+        () => {
+          focusMusic.nextStation();
+          render();
+        }
+      );
     } else if (quotes.getQuoteConfig().showInPetBubble && !quoteDismissed) {
       const q = quotes.getCurrentQuote();
       bubble.renderQuote(
@@ -345,10 +437,17 @@ function render() {
         focusMusic.getPlaying()
       );
     } else if (focusMusic.getPlaying()) {
-      bubble.renderMusicBubble(focusMusic.getCurrentStation(), () => {
-        focusMusic.stop();
-        render();
-      });
+      bubble.renderMusicBubble(
+        focusMusic.getCurrentStation(),
+        () => {
+          focusMusic.stop();
+          render();
+        },
+        () => {
+          focusMusic.nextStation();
+          render();
+        }
+      );
     } else if (localStorage.getItem("ap_idle") !== "0") {
       if (!moodLine) pickMoodLine("idle");
       bubble.renderLine(moodLine);
@@ -532,6 +631,12 @@ listen<Lang>("lang-changed", (e) => { setLang(e.payload); render(); });
 // Bubble theme / opacity / messages changed from Settings.
 listen("bubble-changed", () => { applyBubble(); applyPet(); moodLine = ""; render(); });
 
+window.addEventListener("focusclock-changed", () => render());
+window.addEventListener("focusmusic-changed", () => render());
+window.addEventListener("pomodoro-changed", () => render());
+window.addEventListener("reminders-changed", () => render());
+window.addEventListener("quotes-changed", () => render());
+
 // Tray "Check for updates" (Rust emits this to the main pet window only). The
 // popover has a labelled Updates button, but on Linux appindicator can't open
 // the popover from a tray click, so the tray menu item is the reliable entry
@@ -568,19 +673,159 @@ function inHitRect(e: MouseEvent): boolean {
 }
 
 // --- interactions ------------------------------------------------------------
+const PET_REACTIONS = [
+  ["Hehe~", "That tickles!", "Hi there! 👋", "Oh! Hello~", "*purrs*", "Nyaa~"],
+  ["I love you! 💕", "More pets please!", "Best human ever!", "So happy~ ✨"],
+  ["MAXIMUM LOVE! 💖", "Can't stop smiling! 🥰", "I'm gonna melt~"],
+];
+
+let consecutivePets = 0;
+let lastPetTime = 0;
+let activeReactionEl: HTMLElement | null = null;
+let reactionDismissTimer: number | null = null;
+
+function playPurrSound() {
+  try {
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(140, now);
+    osc.frequency.linearRampToValueAtTime(180, now + 0.08);
+    osc.frequency.linearRampToValueAtTime(130, now + 0.22);
+    gain.gain.setValueAtTime(0.08, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.22);
+  } catch {}
+}
+
+function showPetReactionPill(text: string) {
+  if (activeReactionEl) {
+    activeReactionEl.remove();
+    activeReactionEl = null;
+  }
+  if (reactionDismissTimer) {
+    clearTimeout(reactionDismissTimer);
+    reactionDismissTimer = null;
+  }
+
+  const pill = document.createElement("div");
+  pill.className = "pet-reaction-pill";
+  pill.textContent = text;
+  petRoot.appendChild(pill);
+  activeReactionEl = pill;
+
+  reactionDismissTimer = window.setTimeout(() => {
+    if (activeReactionEl) {
+      activeReactionEl.style.opacity = "0";
+      setTimeout(() => {
+        activeReactionEl?.remove();
+        activeReactionEl = null;
+      }, 250);
+    }
+  }, 1800);
+}
+
+function spawnHearts(e: MouseEvent) {
+  const heartIcons = ["💕", "💖", "✨", "❤️"];
+  for (let i = 0; i < 3; i++) {
+    const heart = document.createElement("span");
+    heart.className = "pet-floating-heart";
+    heart.textContent = heartIcons[Math.floor(Math.random() * heartIcons.length)];
+    const tx = (Math.random() - 0.5) * 40;
+    heart.style.setProperty("--tx", `${tx}px`);
+    heart.style.left = `${Math.min(canvas.offsetWidth - 20, Math.max(10, e.offsetX + (Math.random() - 0.5) * 30))}px`;
+    heart.style.top = `${Math.min(canvas.offsetHeight - 20, Math.max(10, e.offsetY))}px`;
+    petRoot.appendChild(heart);
+    setTimeout(() => heart.remove(), 1000);
+  }
+}
+
+function onPetTap(e: MouseEvent) {
+  const now = Date.now();
+  if (now - lastPetTime < 3000) {
+    consecutivePets++;
+  } else {
+    consecutivePets = 1;
+  }
+  lastPetTime = now;
+
+  const tier = consecutivePets >= 6 ? 2 : (consecutivePets >= 3 ? 1 : 0);
+  const pool = PET_REACTIONS[tier];
+  const reactionText = pool[Math.floor(Math.random() * pool.length)];
+
+  // 1. Pet squish & bounce animation
+  canvas.classList.remove("pet-bouncing");
+  void canvas.offsetWidth;
+  canvas.classList.add("pet-bouncing");
+  setTimeout(() => canvas.classList.remove("pet-bouncing"), 250);
+
+  // 2. Play subtle purr tone
+  playPurrSound();
+
+  // 3. Floating hearts
+  spawnHearts(e);
+
+  // 4. Reaction pill
+  showPetReactionPill(reactionText);
+
+  // 5. Affection XP
+  const slug = myPetSlug();
+  if (slug) {
+    care.mutate(slug, (s) => care.recordAffection(s));
+    emit("care-updated", null).catch(() => {});
+  }
+}
+
 // Rust makes the window click-through outside the pet's hit rect (sprite box
 // + bubble), so any left press that reaches this document is on the pet.
-// Listen on the whole document: the hit rect also covers the gap between the
-// bubble and the sprite and the empty sides of the bubble row, which are
-// body/#pet-root, not the canvas. Pressing there used to be swallowed (not
-// passed to the window below) yet did nothing, so the pet felt stuck.
-document.addEventListener("mousedown", async (e) => {
+document.addEventListener("mousedown", (e) => {
   if (e.button !== 0) return;
   // Bubble controls (fold, carousel dots, dismiss, Warp-focus rows) keep their clicks.
   if ((e.target as HTMLElement).closest("button, a, input, .car-dot, .focusable, [data-nodrag]")) return;
   if (!inHitRect(e)) return;
   emit("popover-close", null);
-  await invoke("drag_pet");
+
+  const isBubbleClick = !!(e.target as HTMLElement).closest(".bubble");
+
+  let dragThresholdPassed = false;
+  const startX = e.clientX;
+  const startY = e.clientY;
+  const startTime = Date.now();
+
+  const onMouseMove = async (ev: MouseEvent) => {
+    if (dragThresholdPassed) return;
+    const dist = Math.hypot(ev.clientX - startX, ev.clientY - startY);
+    if (dist > 5) {
+      dragThresholdPassed = true;
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      await invoke("drag_pet");
+    }
+  };
+
+  const onMouseUp = (ev: MouseEvent) => {
+    window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("mouseup", onMouseUp);
+
+    const dist = Math.hypot(ev.clientX - startX, ev.clientY - startY);
+    const duration = Date.now() - startTime;
+
+    if (!dragThresholdPassed && dist <= 5 && duration < 500) {
+      if (!isBubbleClick) {
+        onPetTap(ev);
+      }
+    }
+  };
+
+  window.addEventListener("mousemove", onMouseMove);
+  window.addEventListener("mouseup", onMouseUp);
 });
 // Right-click opens the pet's stats card (macOS PetStatsView); the tray icon
 // opens the quick popover.

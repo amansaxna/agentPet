@@ -12,6 +12,7 @@ import * as reminders from "./reminders";
 import * as quotes from "./quotes";
 import * as worktracker from "./worktracker";
 import { focusMusic, STATIONS } from "./focusmusic";
+import { focusClock, TIMER_PRESETS, formatFocusTime } from "./focusclock";
 import { dayProgress } from "./dayprogress";
 import { t } from "./i18n";
 import { agentLabel } from "./state";
@@ -139,46 +140,169 @@ export function primaryTargetHtml(color: string): string {
 }
 
 export function pomoAndWorkHtml(color: string): string {
+  const activeMode = focusClock.getActiveMode();
   const pState = pomo.loadState();
-  const isRunning = pState.phase !== "idle";
-  const isFocus = pState.phase === "focus";
-  const isBreak = pState.phase === "shortBreak" || pState.phase === "longBreak";
-  const phaseColor = isFocus ? "#ff453a" : isBreak ? "#30d158" : "#8e8e93";
-  const phaseLabel = isRunning ? pState.phase.toUpperCase() : "POMODORO";
-  const timeStr = pomo.formatTime(pState.remainingSeconds);
+  const tState = focusClock.getTimerState();
+  const sState = focusClock.getStopwatchState();
+
+  const isPomoRunning = pState.phase !== "idle";
+  const isTimerRunning = focusClock.isTimerActive();
+  const isStopwatchRunning = focusClock.isStopwatchActive();
+
   const waterCups = reminders.getWaterCupsToday();
   const analysis = worktracker.computeWorkAnalysis("today");
   const workedStr = worktracker.formatDuration(analysis.totalWorkSeconds);
   const isManual = !!worktracker.getActiveManualSession();
 
-  const actionButtons = !isRunning
-    ? `
-      <button class="sc-pbtn-action focus" data-action="pomo-start" style="background:${color};color:#000">▶ Start Focus</button>
-      <button class="sc-pbtn-action break" data-action="pomo-break">☕ Start Break</button>
-    `
-    : `
-      <button class="sc-pbtn-action" data-action="${pState.isRunning ? 'pomo-pause' : 'pomo-resume'}" style="background:${color};color:#000">
-        ${pState.isRunning ? '⏸ Pause' : '▶ Resume'}
+  // 3-Tab Segmented Control matching macOS
+  const tabs = `
+    <div class="sc-focus-tabs">
+      <button class="sc-focus-tab ${activeMode === "pomodoro" ? "active" : ""}" data-action="focus-mode" data-mode="pomodoro">
+        ${isPomoRunning ? `<span class="sc-focus-indicator-dot" style="background:#ff453a"></span>` : ""}
+        🧠 Pomodoro
       </button>
-      <button class="sc-pbtn-action stop" data-action="pomo-stop">⏹ Stop</button>
-      ${isFocus
-        ? `<button class="sc-pbtn-action break" data-action="pomo-break">☕ Break</button>`
-        : `<button class="sc-pbtn-action focus" data-action="pomo-start">🎯 Focus</button>`
-      }
-    `;
+      <button class="sc-focus-tab ${activeMode === "timer" ? "active" : ""}" data-action="focus-mode" data-mode="timer">
+        ${isTimerRunning ? `<span class="sc-focus-indicator-dot" style="background:#38bdf8"></span>` : ""}
+        ⏱ Timer
+      </button>
+      <button class="sc-focus-tab ${activeMode === "stopwatch" ? "active" : ""}" data-action="focus-mode" data-mode="stopwatch">
+        ${isStopwatchRunning ? `<span class="sc-focus-indicator-dot" style="background:#34d399"></span>` : ""}
+        ⏱ Stopwatch
+      </button>
+    </div>
+  `;
 
-  return `
-    <div class="sc-pomo-bar" style="border: 1px solid ${isRunning ? (isFocus ? 'rgba(255, 69, 58, 0.35)' : 'rgba(48, 209, 88, 0.35)') : 'rgba(255, 255, 255, 0.08)'}">
+  let bodyHtml = "";
+
+  if (activeMode === "pomodoro") {
+    const isFocus = pState.phase === "focus";
+    const isBreak = pState.phase === "shortBreak" || pState.phase === "longBreak";
+    const phaseColor = isFocus ? "#ff453a" : isBreak ? "#30d158" : "#8e8e93";
+    const phaseLabel = isPomoRunning ? pState.phase.toUpperCase() : "POMODORO";
+    const timeStr = pomo.formatTime(pState.remainingSeconds);
+
+    const actionButtons = !isPomoRunning
+      ? `
+        <button class="sc-pbtn-action focus" data-action="pomo-start" style="background:${color};color:#000">▶ Start Focus</button>
+        <button class="sc-pbtn-action break" data-action="pomo-break">☕ Start Break</button>
+      `
+      : `
+        <button class="sc-pbtn-action" data-action="${pState.isRunning ? 'pomo-pause' : 'pomo-resume'}" style="background:${color};color:#000">
+          ${pState.isRunning ? '⏸ Pause' : '▶ Resume'}
+        </button>
+        <button class="sc-pbtn-action stop" data-action="pomo-stop">⏹ Stop</button>
+        ${isFocus
+          ? `<button class="sc-pbtn-action break" data-action="pomo-break">☕ Break</button>`
+          : `<button class="sc-pbtn-action focus" data-action="pomo-start">🎯 Focus</button>`
+        }
+      `;
+
+    bodyHtml = `
       <div class="sc-pomo-top">
         <div class="sc-pomo-status">
           <span class="sc-pomo-dot" style="background:${phaseColor}"></span>
           <b class="sc-pomo-phase" style="color:${phaseColor}">${phaseLabel}</b>
-          ${isRunning && pState.subjectTag ? `<span class="dim">· ${esc(pState.subjectTag)}</span>` : ''}
+          ${isPomoRunning && pState.subjectTag ? `<span class="dim">· ${esc(pState.subjectTag)}</span>` : ''}
         </div>
-        <b class="sc-pomo-time" style="color:${isRunning && !pState.isRunning ? '#ff9f0a' : '#fff'}">${timeStr}</b>
+        <b class="sc-pomo-time" style="color:${isPomoRunning && !pState.isRunning ? '#ff9f0a' : '#fff'}">${timeStr}</b>
       </div>
       <div class="sc-pomo-actions-row">
         ${actionButtons}
+      </div>
+    `;
+  } else if (activeMode === "timer") {
+    const isPaused = tState.state === "paused";
+    const isRunning = tState.state === "running";
+    const isActive = isRunning || isPaused;
+    const timeStr = formatFocusTime(tState.secondsRemaining);
+    const phaseColor = isPaused ? "#ff9f0a" : isRunning ? "#38bdf8" : "#8e8e93";
+    const phaseLabel = isPaused ? "PAUSED" : isRunning ? "COUNTDOWN" : "TIMER";
+
+    const presetsHtml = TIMER_PRESETS.map((m) => `
+      <button class="sc-preset-chip" data-action="timer-start" data-mins="${m}">${m}m</button>
+    `).join("");
+
+    const actionButtons = !isActive
+      ? `
+        <div class="sc-presets-wrap">
+          ${presetsHtml}
+        </div>
+      `
+      : `
+        <button class="sc-pbtn-action" data-action="${isRunning ? 'timer-pause' : 'timer-resume'}" style="background:${phaseColor};color:#000">
+          ${isRunning ? '⏸ Pause' : '▶ Resume'}
+        </button>
+        <button class="sc-pbtn-action" data-action="timer-add-5">+5m</button>
+        <button class="sc-pbtn-action stop" data-action="timer-stop">⏹ Stop</button>
+      `;
+
+    bodyHtml = `
+      <div class="sc-pomo-top">
+        <div class="sc-pomo-status">
+          <span class="sc-pomo-dot" style="background:${phaseColor}"></span>
+          <b class="sc-pomo-phase" style="color:${phaseColor}">${phaseLabel}</b>
+          ${isActive && tState.activeSubject ? `<span class="dim">· ${esc(tState.activeSubject)}</span>` : ''}
+        </div>
+        <b class="sc-pomo-time" style="color:${isPaused ? '#ff9f0a' : '#fff'}">${timeStr}</b>
+      </div>
+      <div class="sc-pomo-actions-row">
+        ${actionButtons}
+      </div>
+    `;
+  } else if (activeMode === "stopwatch") {
+    const isPaused = sState.state === "paused";
+    const isRunning = sState.state === "running";
+    const isActive = isRunning || isPaused;
+    const timeStr = formatFocusTime(sState.elapsedSeconds);
+    const phaseColor = isPaused ? "#ff9f0a" : isRunning ? "#34d399" : "#8e8e93";
+    const phaseLabel = isPaused ? "PAUSED" : isRunning ? "RECORDING" : "STOPWATCH";
+
+    const actionButtons = !isActive
+      ? `
+        <button class="sc-pbtn-action focus" data-action="stopwatch-start" style="background:${color};color:#000">▶ Start Stopwatch</button>
+      `
+      : `
+        <button class="sc-pbtn-action" data-action="${isRunning ? 'stopwatch-pause' : 'stopwatch-resume'}" style="background:${phaseColor};color:#000">
+          ${isRunning ? '⏸ Pause' : '▶ Resume'}
+        </button>
+        <button class="sc-pbtn-action" data-action="stopwatch-lap">🏁 Lap</button>
+        <button class="sc-pbtn-action stop" data-action="stopwatch-stop">⏹ Stop</button>
+      `;
+
+    const lapsHtml = sState.laps.length
+      ? `
+        <div class="sc-laps-list">
+          ${sState.laps.slice(0, 4).map((lapSecs, idx) => `
+            <div class="sc-lap-item">
+              <span class="sc-lap-idx">Lap ${sState.laps.length - idx}</span>
+              <span class="sc-lap-time">${formatFocusTime(lapSecs)}</span>
+            </div>
+          `).join("")}
+        </div>
+      `
+      : "";
+
+    bodyHtml = `
+      <div class="sc-pomo-top">
+        <div class="sc-pomo-status">
+          <span class="sc-pomo-dot" style="background:${phaseColor}"></span>
+          <b class="sc-pomo-phase" style="color:${phaseColor}">${phaseLabel}</b>
+          ${isActive && sState.activeSubject ? `<span class="dim">· ${esc(sState.activeSubject)}</span>` : ''}
+        </div>
+        <b class="sc-pomo-time" style="color:${isPaused ? '#ff9f0a' : '#fff'}">${timeStr}</b>
+      </div>
+      <div class="sc-pomo-actions-row">
+        ${actionButtons}
+      </div>
+      ${lapsHtml}
+    `;
+  }
+
+  return `
+    <div class="sc-pomo-bar">
+      ${tabs}
+      <div class="sc-focus-content">
+        ${bodyHtml}
       </div>
       <div class="sc-pomo-sub">
         <button class="sc-work-toggle-btn ${isManual ? 'active' : ''}" data-action="toggle-manual-work">

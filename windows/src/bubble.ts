@@ -22,6 +22,19 @@ function customAgentColor(name: string): string {
 export type BubbleToken =
   | "dot" | "icon" | "title" | "project" | "separator" | "message" | "stateLabel" | "elapsed";
 
+export interface FocusClockBubbleItem {
+  id: "pomodoro" | "timer" | "stopwatch";
+  icon: string;
+  phaseLabel: string;
+  timeStr: string;
+  dotColor: string;
+  isPaused: boolean;
+  onToggle: () => void;
+  onStop: () => void;
+  onMusicToggle?: () => void;
+  isMusicPlaying?: boolean;
+}
+
 export interface TokenItem { token: BubbleToken; isVisible: boolean }
 
 export const LAYOUT_PRESETS: Record<string, TokenItem[]> = {
@@ -387,6 +400,101 @@ export class BubbleRenderer {
     this.root.hidden = false;
   }
 
+  renderComposite(
+    sessions: Session[],
+    clocks: FocusClockBubbleItem[],
+    musicPill?: { station: { title: string; icon?: string }; onStop: () => void; onNext?: () => void }
+  ) {
+    this.clear();
+
+    const container = document.createElement("div");
+    container.className = "bubble-composite-wrap";
+
+    // 1. Music pill on top if standalone music active
+    if (musicPill) {
+      const mRow = document.createElement("div");
+      mRow.className = "music-capsule-row";
+      mRow.innerHTML = `
+        <span class="m-headphone-icon">🎧</span>
+        <span class="m-title">${musicPill.station.title}</span>
+        ${musicPill.onNext ? `<button class="m-skip-btn" title="Next Station">⏩</button>` : ""}
+        <button class="m-stop-btn" title="Stop Focus Music">■</button>
+      `;
+      if (musicPill.onNext) {
+        mRow.querySelector(".m-skip-btn")?.addEventListener("click", (e) => {
+          e.stopPropagation();
+          musicPill.onNext?.();
+        });
+      }
+      mRow.querySelector(".m-stop-btn")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        musicPill.onStop();
+      });
+      container.appendChild(mRow);
+    }
+
+    // 2. Focus Clocks rows (Pomodoro, Countdown Timer, Stopwatch)
+    for (const clock of clocks) {
+      const row = document.createElement("div");
+      row.className = "pet-pomodoro-pill focus-clock-row";
+      row.innerHTML = `
+        <div class="pomo-dot" style="background:${clock.dotColor}"></div>
+        <span class="pomo-icon">${clock.icon}</span>
+        <span class="pomo-phase">${clock.phaseLabel}</span>
+        <span class="pomo-time">${clock.timeStr}</span>
+        <div class="pomo-btns">
+          ${clock.onMusicToggle ? `<button class="pomo-music" title="${clock.isMusicPlaying ? "Stop Focus Music" : "Play Focus Music"}">${clock.isMusicPlaying ? "🔊" : "🎵"}</button>` : ""}
+          <button class="pomo-toggle" title="${clock.isPaused ? "Resume" : "Pause"}">${clock.isPaused ? "▶" : "⏸"}</button>
+          <button class="pomo-stop" title="Stop">⏹</button>
+        </div>
+      `;
+      if (clock.onMusicToggle) {
+        row.querySelector(".pomo-music")?.addEventListener("click", (e) => {
+          e.stopPropagation();
+          clock.onMusicToggle?.();
+        });
+      }
+      row.querySelector(".pomo-toggle")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        clock.onToggle();
+      });
+      row.querySelector(".pomo-stop")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        clock.onStop();
+      });
+      container.appendChild(row);
+    }
+
+    // 3. Agent sessions rows
+    if (sessions.length) {
+      const cfg = readBubbleConfig();
+      const groups = groupSessions(sessions, cfg);
+      const sessWrap = document.createElement("div");
+      sessWrap.className = "bubble-sessions-wrap";
+      for (const g of groups.slice(0, cfg.maxSessions)) {
+        const brow = document.createElement("div");
+        brow.className = `brow ${g.session.state}`;
+        const msg = messageFor(g.session);
+        const elapsed = elapsedString(g.session.stateSince);
+        brow.innerHTML = `
+          <div class="sdot ${cfg.dotStyle} ${g.session.state === "working" ? "spin" : ""}"></div>
+          <span class="icon-slot">${uiIcon(g.session.agent) || "🤖"}</span>
+          <span class="rtitle">${g.session.agent}</span>
+          <span class="rsep">${cfg.separator}</span>
+          <span class="amsg">${msg}</span>
+          <span class="clock">${elapsed}</span>
+        `;
+        sessWrap.appendChild(brow);
+      }
+      container.appendChild(sessWrap);
+    }
+
+    this.root.appendChild(container);
+    const totalRows = (musicPill ? 1 : 0) + clocks.length + sessions.length;
+    this.root.classList.toggle("capsule", totalRows <= 1);
+    this.root.hidden = false;
+  }
+
   renderPomodoro(
     pomo: { phase: string; remainingSeconds: number; isRunning: boolean; subject?: string },
     onToggle: () => void,
@@ -443,18 +551,25 @@ export class BubbleRenderer {
   }
 
   renderMusicBubble(
-    station: { title: string; icon: string },
-    onStop: () => void
+    station: { title: string; icon?: string },
+    onStop: () => void,
+    onNext?: () => void
   ) {
     this.clear();
     const pill = document.createElement("div");
     pill.className = "music-capsule-row";
     pill.innerHTML = `
-      <span class="m-icon">${station.icon || "🎻"}</span>
-      <span class="m-prefix">Playing:</span>
+      <span class="m-headphone-icon">🎧</span>
       <span class="m-title">${station.title}</span>
-      <button class="m-stop-btn" title="Stop Focus Music">⏹ Stop</button>
+      ${onNext ? `<button class="m-skip-btn" title="Next Station">⏩</button>` : ""}
+      <button class="m-stop-btn" title="Stop Focus Music">■</button>
     `;
+    if (onNext) {
+      pill.querySelector(".m-skip-btn")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onNext();
+      });
+    }
     pill.querySelector(".m-stop-btn")?.addEventListener("click", (e) => {
       e.stopPropagation();
       onStop();
