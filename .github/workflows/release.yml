@@ -5,6 +5,11 @@ name: Multi-Platform Release
 # Triggered automatically on push of a `v*` tag, or manually via "Run workflow".
 on:
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag to publish to (e.g. v1.18.1)'
+        required: true
+        default: 'v1.18.1'
   push:
     tags:
       - "v*"
@@ -42,7 +47,9 @@ jobs:
       - name: Attach macOS DMG to Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag_name || github.ref_name }}
           files: build/*.dmg
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   windows:
     name: Build Windows Installers
@@ -87,7 +94,9 @@ jobs:
       - name: Attach Windows Installers to Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag_name || github.ref_name }}
           files: |
             windows/src-tauri/target/release/bundle/nsis/*-setup.exe
             windows/src-tauri/target/release/bundle/msi/*.msi
             windows/AgentPet-portable-x64.zip
+          token: ${{ secrets.GITHUB_TOKEN }}
