@@ -24,7 +24,7 @@ public struct FocusMusicStation: Identifiable, Codable, Equatable, Sendable {
             title: "Classical Violin & Strings",
             description: "Soothing violin concertos, sonatas & string ensembles",
             icon: "music.quarternote.3",
-            streamURL: "https://stream.srg-ssr.ch/m/rsc_de/mp3_128"
+            streamURL: "https://stream.wqxr.org/wqxr"
         ),
         FocusMusicStation(
             id: "violin_acoustic",
