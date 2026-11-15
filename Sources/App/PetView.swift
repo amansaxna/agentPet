@@ -1545,17 +1545,13 @@ struct PetMusicBubble: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 6) {
-                Image(systemName: "speaker.wave.2.fill")
+            HStack(spacing: 5) {
+                Image(systemName: "headphones")
                     .font(.system(size: 9.5, weight: .bold))
                     .foregroundStyle(Color(red: 0.38, green: 0.72, blue: 0.82))
 
-                Text("Playing:")
-                    .font(.system(size: 9.5, weight: .medium))
-                    .foregroundStyle(settings.bubbleTextColor(0.50))
-
                 Text(station.title)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 9.5, weight: .semibold))
                     .foregroundStyle(settings.bubbleTextColor(0.88))
                     .lineLimit(1)
 
@@ -1572,22 +1568,17 @@ struct PetMusicBubble: View {
                 .help("Next Station: \(musicCtrl.currentStation.title)")
 
                 Button(action: onStop) {
-                    HStack(spacing: 2.5) {
-                        Image(systemName: "stop.fill")
-                            .font(.system(size: 6.5, weight: .bold))
-                        Text("Stop")
-                            .font(.system(size: 8.5, weight: .semibold))
-                    }
-                    .foregroundStyle(Color(red: 0.90, green: 0.45, blue: 0.45))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2.5)
-                    .background(Capsule().fill(Color.red.opacity(0.14)))
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 6.5, weight: .bold))
+                        .foregroundStyle(Color(red: 0.90, green: 0.45, blue: 0.45))
+                        .frame(width: 15, height: 15)
+                        .background(Circle().fill(Color.red.opacity(0.14)))
                 }
                 .buttonStyle(.plain)
                 .help("Stop Focus Music")
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4.5)
             .background(Capsule().fill(fill))
             .overlay(Capsule().strokeBorder(stroke, lineWidth: 1))
             .compositingGroup()
