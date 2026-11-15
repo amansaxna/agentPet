@@ -153,7 +153,7 @@ private struct AboutTab: View {
     @Environment(\.openURL) private var openURL
     @State private var showCoffee = false
 
-    private let repo = URL(string: "https://github.com/ntd4996/agentpet")!
+    private let repo = URL(string: "https://github.com/amansaxna/agentPet")!
     private let profile = URL(string: "https://github.com/ntd4996")!
     private let coffee = URL(string: "https://buymeacoffee.com/ntd4996")!
     private let discord = URL(string: "https://discord.gg/kzFJKsZav")!
@@ -207,7 +207,7 @@ private struct AboutTab: View {
                     Label("Nguyễn Thành Đạt (@ntd4996)", systemImage: "person.crop.circle")
                 }
                 Link(destination: repo) {
-                    Label("github.com/ntd4996/agentpet", systemImage: "chevron.left.forwardslash.chevron.right")
+                    Label("github.com/amansaxna/agentPet", systemImage: "chevron.left.forwardslash.chevron.right")
                 }
             }
 
